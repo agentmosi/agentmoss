@@ -1,9 +1,9 @@
 {
-  "name": "@openclaw/agentmonitor",
+  "name": "@openclaw/agentmoss",
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "AgentMonitor — Runtime behavior monitor & safety guard for AI agents, with plugin adapter for OpenClaw hooks",
+  "description": "AgentMoss — Runtime behavior monitor & safety guard for AI agents, with plugin adapter for OpenClaw hooks",
   "engines": {
     "node": ">=22"
   },

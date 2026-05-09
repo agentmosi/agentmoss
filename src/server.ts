@@ -13,7 +13,7 @@ const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
 const rulesPath = path.join(rootDir, "data", "rules.json");
 const port = Number(process.env.PORT ?? 19877);
-const store = new TraceStore(path.join(rootDir, "data", "agentmonitor.sqlite"));
+const store = new TraceStore(path.join(rootDir, "data", "agentmoss.sqlite"));
 const bus = new EventBus();
 
 // Track connected SSE clients for real-time push
@@ -228,7 +228,7 @@ await watchRules();
 console.log("[rules] 规则文件热更新监听已启动");
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`✅ AgentMonitor demo listening on http://127.0.0.1:${port}`);
+  console.log(`✅ AgentMoss demo listening on http://127.0.0.1:${port}`);
 });
 
 // ── Helpers ──
@@ -301,7 +301,7 @@ function toOpenClawHookResult(decision: ReturnType<typeof checkToolCall>["decisi
   if (decision.action === "require_approval") {
     return {
       requireApproval: {
-        title: "AgentMonitor 安全审批",
+        title: "AgentMoss 安全审批",
         description: decision.reason,
         severity: decision.findings.some((f) => f.severity === "critical") ? "critical" : "warning",
         timeoutMs: 30_000,

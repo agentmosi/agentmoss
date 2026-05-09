@@ -5,7 +5,7 @@ import type {
   PluginHookToolContext,
 } from "openclaw/plugin-sdk/plugin-runtime";
 
-type AgentMonitorConfig = {
+type AgentMossConfig = {
   enabled?: boolean;
   monitorUrl?: string;
   timeoutMs?: number;
@@ -14,13 +14,13 @@ type AgentMonitorConfig = {
   auditOnly?: boolean;
 };
 
-type ResolvedAgentMonitorConfig = Required<AgentMonitorConfig>;
+type ResolvedAgentMossConfig = Required<AgentMossConfig>;
 
 type MonitorToolCallResponse = {
   hookResult?: PluginHookBeforeToolCallResult;
 };
 
-const DEFAULT_CONFIG: ResolvedAgentMonitorConfig = {
+const DEFAULT_CONFIG: ResolvedAgentMossConfig = {
   enabled: true,
   monitorUrl: "http://127.0.0.1:19877",
   timeoutMs: 80,
@@ -30,18 +30,18 @@ const DEFAULT_CONFIG: ResolvedAgentMonitorConfig = {
 };
 
 export default definePluginEntry({
-  id: "agentmonitor-demo-2",
-  name: "AgentMonitor Demo 2",
+  id: "agentmoss-demo-2",
+  name: "AgentMoss Demo 2",
   description:
-    "Forwards OpenClaw runtime hook events to AgentMonitor Demo 2 and enforces tool-call decisions.",
+    "Forwards OpenClaw runtime hook events to AgentMoss Demo 2 and enforces tool-call decisions.",
   register(api: OpenClawPluginApi) {
     const cfg = resolveConfig(api.pluginConfig);
     if (!cfg.enabled) {
-      api.logger.info("[AgentMonitor Demo 2] disabled by plugin config.");
+      api.logger.info("[AgentMoss Demo 2] disabled by plugin config.");
       return;
     }
 
-    api.logger.info(`[AgentMonitor Demo 2] connected to ${cfg.monitorUrl}`);
+    api.logger.info(`[AgentMoss Demo 2] connected to ${cfg.monitorUrl}`);
 
     api.on(
       "before_tool_call",
@@ -76,7 +76,7 @@ export default definePluginEntry({
 
 async function checkToolCall(
   api: OpenClawPluginApi,
-  cfg: ResolvedAgentMonitorConfig,
+  cfg: ResolvedAgentMossConfig,
   event: PluginHookBeforeToolCallEvent,
   ctx: PluginHookToolContext,
 ): Promise<PluginHookBeforeToolCallResult | undefined> {
@@ -90,13 +90,13 @@ async function checkToolCall(
   });
 
   if (!response.ok) {
-    api.logger.warn(`[AgentMonitor Demo 2] before_tool_call failed: ${response.error}`);
+    api.logger.warn(`[AgentMoss Demo 2] before_tool_call failed: ${response.error}`);
     if (!cfg.failClosedOnError) {
       return undefined;
     }
     const blockResult: PluginHookBeforeToolCallResult = {
       block: true,
-      blockReason: `AgentMonitor Demo 2 不可用，已按故障阻断策略拒绝工具调用：${response.error}`,
+      blockReason: `AgentMoss Demo 2 不可用，已按故障阻断策略拒绝工具调用：${response.error}`,
     };
     return blockResult;
   }
@@ -109,7 +109,7 @@ async function checkToolCall(
     }
     const blockResult: PluginHookBeforeToolCallResult = {
       block: true,
-      blockReason: "AgentMonitor Demo 2 返回了无效的工具调用决策，已按故障阻断策略拒绝执行。",
+      blockReason: "AgentMoss Demo 2 返回了无效的工具调用决策，已按故障阻断策略拒绝执行。",
     };
     return blockResult;
   }
@@ -119,7 +119,7 @@ async function checkToolCall(
 
 async function postRuntimeEvent(
   api: OpenClawPluginApi,
-  cfg: ResolvedAgentMonitorConfig,
+  cfg: ResolvedAgentMossConfig,
   hookName: string,
   eventType: string,
   sourceTrust: "system" | "tool",
@@ -137,13 +137,13 @@ async function postRuntimeEvent(
   });
 
   if (!response.ok) {
-    api.logger.debug?.(`[AgentMonitor Demo 2] observation hook ${hookName} failed: ${response.error}`);
+    api.logger.debug?.(`[AgentMoss Demo 2] observation hook ${hookName} failed: ${response.error}`);
   }
 }
 
 async function postJson(
   api: OpenClawPluginApi,
-  cfg: ResolvedAgentMonitorConfig,
+  cfg: ResolvedAgentMossConfig,
   pathname: string,
   body: unknown,
 ): Promise<{ ok: true; body: unknown } | { ok: false; error: string }> {
@@ -167,7 +167,7 @@ async function postJson(
   }
 }
 
-function resolveConfig(raw: Record<string, unknown> | undefined): ResolvedAgentMonitorConfig {
+function resolveConfig(raw: Record<string, unknown> | undefined): ResolvedAgentMossConfig {
   return {
     enabled: raw?.enabled === undefined ? DEFAULT_CONFIG.enabled : raw.enabled === true,
     monitorUrl:

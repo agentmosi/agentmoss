@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "description": "AgentMonitor 安全策略规则配置 - 修改后自动热更新",
+  "description": "AgentMoss 安全策略规则配置 - 修改后自动热更新",
   "rules": [
     {
       "id": "cmd.rm_rf",

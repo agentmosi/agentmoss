@@ -1,7 +1,7 @@
 {
-  "id": "agentmonitor-demo-2",
-  "name": "AgentMonitor Demo 2",
-  "description": "Forward OpenClaw runtime hook events to the local AgentMonitor demo-2 service and enforce tool-call decisions.",
+  "id": "agentmoss-demo-2",
+  "name": "AgentMoss Demo 2",
+  "description": "Forward OpenClaw runtime hook events to the local AgentMoss demo-2 service and enforce tool-call decisions.",
   "version": "0.1.0",
   "configSchema": {
     "type": "object",
@@ -10,12 +10,12 @@
       "enabled": {
         "type": "boolean",
         "default": true,
-        "description": "Enable AgentMonitor Demo 2 hook forwarding and enforcement."
+        "description": "Enable AgentMoss Demo 2 hook forwarding and enforcement."
       },
       "monitorUrl": {
         "type": "string",
         "default": "http://127.0.0.1:19877",
-        "description": "Base URL for the AgentMonitor Demo 2 service."
+        "description": "Base URL for the AgentMoss Demo 2 service."
       },
       "timeoutMs": {
         "type": "number",
@@ -48,7 +48,7 @@
     },
     "monitorUrl": {
       "label": "监控服务地址",
-      "help": "AgentMonitor demo-2 服务地址，默认 http://127.0.0.1:19877。"
+      "help": "AgentMoss demo-2 服务地址，默认 http://127.0.0.1:19877。"
     },
     "timeoutMs": {
       "label": "实时检查超时",

@@ -13,7 +13,7 @@ type OpenClawPluginApiLike = {
   ) => void;
 };
 
-export function registerAgentMonitorHooks(api: OpenClawPluginApiLike, monitorBaseUrl = "http://127.0.0.1:19876") {
+export function registerAgentMossHooks(api: OpenClawPluginApiLike, monitorBaseUrl = "http://127.0.0.1:19876") {
   api.on(
     "before_tool_call",
     async (event, ctx) => {
@@ -33,7 +33,7 @@ export function registerAgentMonitorHooks(api: OpenClawPluginApiLike, monitorBas
       if (!response.ok) {
         return {
           block: true,
-          blockReason: `AgentMonitor unavailable: ${response.status}`,
+          blockReason: `AgentMoss unavailable: ${response.status}`,
         };
       }
 
