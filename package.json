@@ -1,0 +1,25 @@
+{
+  "name": "@openclaw/agentmonitor",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "AgentMonitor — Runtime behavior monitor & safety guard for AI agents, with plugin adapter for OpenClaw hooks",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types --watch src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

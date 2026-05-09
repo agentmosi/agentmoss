@@ -1,0 +1,70 @@
+{
+  "id": "agentmonitor-demo-2",
+  "name": "AgentMonitor Demo 2",
+  "description": "Forward OpenClaw runtime hook events to the local AgentMonitor demo-2 service and enforce tool-call decisions.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Enable AgentMonitor Demo 2 hook forwarding and enforcement."
+      },
+      "monitorUrl": {
+        "type": "string",
+        "default": "http://127.0.0.1:19877",
+        "description": "Base URL for the AgentMonitor Demo 2 service."
+      },
+      "timeoutMs": {
+        "type": "number",
+        "minimum": 10,
+        "maximum": 5000,
+        "default": 80,
+        "description": "HTTP timeout for the before_tool_call enforcement path."
+      },
+      "failClosedOnError": {
+        "type": "boolean",
+        "default": true,
+        "description": "Block tool calls when the monitor is unavailable or returns an invalid response."
+      },
+      "observeHooks": {
+        "type": "boolean",
+        "default": true,
+        "description": "Forward non-blocking observation hooks such as llm_input, llm_output, after_tool_call, and message_sending."
+      },
+      "auditOnly": {
+        "type": "boolean",
+        "default": false,
+        "description": "Record monitor decisions but never enforce block or approval responses."
+      }
+    }
+  },
+  "uiHints": {
+    "enabled": {
+      "label": "启用监控",
+      "help": "开启 OpenClaw hook 事件转发和工具调用实时控制（Demo 2）。"
+    },
+    "monitorUrl": {
+      "label": "监控服务地址",
+      "help": "AgentMonitor demo-2 服务地址，默认 http://127.0.0.1:19877。"
+    },
+    "timeoutMs": {
+      "label": "实时检查超时",
+      "help": "before_tool_call 的 HTTP 超时时间。建议保持在 100ms 以内。"
+    },
+    "failClosedOnError": {
+      "label": "故障时阻断",
+      "help": "监控服务不可用时阻断工具调用，避免安全系统失效后静默放行。"
+    },
+    "observeHooks": {
+      "label": "采集观察类事件",
+      "help": "采集模型输入输出、工具结果和消息发送事件。"
+    },
+    "auditOnly": {
+      "label": "仅审计",
+      "help": "只记录决策，不真正阻断或触发审批。"
+    }
+  }
+}

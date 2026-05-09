@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentMoss: Agent行为全链路细粒度监控与安全分析</title>
+<style>
+  :root {
+    --bg: #f7f8fc;
+    --surface: #ffffff;
+    --surface-alt: #fafbfd;
+    --border-light: #f0f2f7;
+    --border: #e8ebf2;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --info: #3b82f6;
+    --radius-xs: 6px;
+    --radius-sm: 10px;
+    --radius: 14px;
+    --radius-lg: 18px;
+    --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+    --shadow-sm: 0 1px 3px rgba(15,23,42,0.05);
+    --shadow-md: 0 8px 24px rgba(15,23,42,0.06);
+    --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    letter-spacing: -0.01em;
+  }
+  .topbar {
+    height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 28px;
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255,255,255,0.82);
+    border-bottom: 1px solid rgba(232,235,242,0.8);
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; }
+  .topbar-brand .logo {
+    width: 36px; height: 36px; background: var(--accent-gradient); border-radius: var(--radius-xs);
+    display: flex; align-items: center; justify-content: center; font-size: 17px; color: #fff;
+    box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+  }
+  .brand-name {
+    font-weight: 800;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text); border-radius: var(--radius-xs);
+    padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: #f4f6fb; border-color: #c8cfe0; transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 6px; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 28px 80px; }
+  .hero { text-align: center; margin-bottom: 48px; }
+  .hero h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 12px; }
+  .hero h1 .gradient {
+    background: var(--accent-gradient);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .hero p { color: var(--text-secondary); font-size: 17px; max-width: 600px; margin: 0 auto; line-height: 1.8; }
+
+  .section { margin-bottom: 40px; }
+  .section-title {
+    font-size: 20px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+    letter-spacing: -0.02em;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    padding: 24px 28px; box-shadow: var(--shadow-xs); transition: box-shadow var(--transition);
+  }
+  .card:hover { box-shadow: var(--shadow-sm); }
+
+  .features { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .feature {
+    background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius);
+    padding: 20px 24px; box-shadow: var(--shadow-xs); transition: all var(--transition);
+  }
+  .feature:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); border-color: #c8cfe0; }
+  .feature .feat-icon { font-size: 28px; margin-bottom: 10px; }
+  .feature .feat-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .feature .feat-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+  .flow-svg-wrapper {
+    background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    padding: 30px 20px 20px; display: flex; justify-content: center; overflow-x: auto; box-shadow: var(--shadow-xs);
+  }
+  .flow-svg { max-width: 100%; height: auto; min-width: 680px; }
+
+  .rules-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .rules-table th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); padding: 10px 14px 8px; border-bottom: 2px solid var(--border-light);
+    font-weight: 700;
+  }
+  .rules-table td { padding: 11px 14px; border-bottom: 1px solid var(--border-light); color: var(--text-secondary); }
+  .rules-table tr:hover td { background: var(--surface-alt); }
+  .badge {
+    display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+  }
+  .badge-block { background: #fef2f2; color: #dc2626; }
+  .badge-warn { background: #fffbeb; color: #d97706; }
+  .badge-allow { background: #ecfdf5; color: #059669; }
+
+  .spec-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .spec-item { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; background: #f8f9fc; border-radius: var(--radius-sm); font-size: 13.5px; }
+  .spec-item .spec-icon { font-size: 22px; flex-shrink: 0; }
+  .spec-item strong { display: block; margin-bottom: 2px; font-size: 13px; }
+
+  .endpoint {
+    background: #f8f9fc; border: 1px solid var(--border-light); border-radius: var(--radius-sm);
+    padding: 10px 16px; margin-bottom: 8px; font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+    font-size: 12.5px; display: flex; align-items: center; gap: 12px;
+  }
+  .endpoint .method {
+    font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .method-get { background: #dbeafe; color: #1d4ed8; }
+  .method-post { background: #d1fae5; color: #059669; }
+  .method-put { background: #fef3c7; color: #d97706; }
+  .endpoint .path { color: var(--text); }
+
+  .code-block {
+    background: #1e293b; border: 1px solid #334155; border-radius: var(--radius-sm);
+    padding: 20px 24px; overflow-x: auto; position: relative; font-family: "SF Mono", "Fira Code", Menlo, Consolas, monospace;
+    font-size: 12.5px; line-height: 1.8; color: #e2e8f0; white-space: pre;
+    box-shadow: var(--shadow-sm);
+  }
+  .code-block .lang-tag {
+    position: absolute; top: 10px; right: 16px; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.06em; color: #64748b; font-weight: 600;
+  }
+  .code-block .key   { color: #93c5fd; }
+  .code-block .str   { color: #a5b4fc; }
+  .code-block .num   { color: #fbbf24; }
+  .code-block .bool  { color: #67e8f9; }
+  .code-block .cmt   { color: #64748b; font-style: italic; }
+  .code-block .brack { color: #94a3b8; }
+
+  .subsection {
+    margin-bottom: 20px;
+    padding: 18px 22px;
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-xs);
+  }
+  .subsection-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .paper-footer {
+    margin: 28px 0 0; padding: 20px 24px;
+    background: #fff; border: 1px solid var(--border-light); border-radius: var(--radius-lg);
+    font-size: 14px; color: var(--text-secondary); line-height: 1.8;
+    text-align: center; display: flex; align-items: center; justify-content: center;
+    flex-wrap: wrap; gap: 8px 12px;
+  }
+  .paper-footer a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .paper-footer a:hover { text-decoration: underline; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    .features { grid-template-columns: 1fr; }
+    .spec-list { grid-template-columns: 1fr; }
+    .container { padding: 24px 16px 60px; }
+    .hero h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-brand">
+    <div class="logo">🌿</div>
+    <div class="brand-text">
+      <span class="brand-name">AgentMoss</span>
+      <span style="font-size:12px;color:#94a3b8;font-weight:500;margin-left:6px;">· Agent行为全链路监控与安全分析</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <a href="https://github.com/agentmosi/AgentMonitor" class="btn btn-sm" target="_blank" rel="noopener">📁 GitHub</a>
+    <a href="https://github.com/agentmosi/AgentMonitor#readme" class="btn btn-sm" target="_blank" rel="noopener">📄 Doc</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>🌿 <span class="gradient">AgentMoss</span><br>Agent行为全链路细粒度监控与安全分析</h1>
+    <p>一套轻量级、可嵌入的 Agent 运行时安全检测系统，覆盖 Prompt 注入检测、工具调用审查、敏感路径扫描与密钥匹配——为 AI Agent 提供全链路行为可见性与实时安全阻断能力。</p>
+  </div>
+
+  <!-- 总体框架架构图 -->
+  <div class="section">
+    <div class="section-title">🏗️ AgentMoss 总体框架</div>
+    <div class="flow-svg-wrapper">
+      <svg class="flow-svg" viewBox="0 0 920 660" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="af0" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.06"/></filter>
+          <filter id="af1" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.1"/></filter>
+          <marker id="adn" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#6366f1"/></marker>
+          <linearGradient id="agrad-agent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8fafc"/><stop offset="1" stop-color="#f1f5f9"/></linearGradient>
+          <linearGradient id="agrad-adapter" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eff6ff"/><stop offset="1" stop-color="#dbeafe"/></linearGradient>
+          <linearGradient id="agrad-ir" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5f3ff"/><stop offset="1" stop-color="#ede9fe"/></linearGradient>
+          <linearGradient id="agrad-analysis" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff7ed"/><stop offset="1" stop-color="#ffedd5"/></linearGradient>
+          <linearGradient id="agrad-defense" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecfdf5"/><stop offset="1" stop-color="#d1fae5"/></linearGradient>
+          <linearGradient id="agrad-bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fafbfd"/><stop offset="1" stop-color="#f0f2f7"/></linearGradient>
+        </defs>
+
+        <!-- Background -->
+        <rect x="0" y="0" width="920" height="660" rx="14" fill="url(#agrad-bg)" stroke="#e8ebf2" stroke-width="1"/>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAYER 1: 可适配的 AI Agent (y: 20–120) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <rect x="30" y="18" width="860" height="110" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.2" filter="url(#af0)"/>
+        <text x="52" y="40" font-size="12" font-weight="800" fill="#475569" letter-spacing="0.03em">🔌 可适配的 AI Agent</text>
+
+        <!-- Agent 1: xiaoO (openEuler) -->
+        <rect x="50" y="54" width="185" height="56" rx="9" fill="url(#agrad-agent)" stroke="#cbd5e1" stroke-width="1.2" filter="url(#af0)"/>
+        <rect x="56" y="60" width="32" height="32" rx="7" fill="#002fa7"/>
+        <text x="72" y="82" text-anchor="middle" font-size="15" fill="#fff" font-weight="800">O</text>
+        <text x="98" y="76" font-size="11.5" font-weight="700" fill="#1e293b">xiaoO</text>
+        <text x="98" y="92" font-size="9" fill="#94a3b8">openEuler</text>
+        <a href="https://atomgit.com/openeuler/xiaoO" target="_blank" rel="noopener">
+          <rect x="190" y="60" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" opacity="0.7"/>
+          <text x="197" y="71" text-anchor="middle" font-size="8" fill="#94a3b8">↗</text>
+        </a>
+
+        <!-- Agent 2: OpenClaw -->
+        <rect x="260" y="54" width="185" height="56" rx="9" fill="url(#agrad-agent)" stroke="#cbd5e1" stroke-width="1.2" filter="url(#af0)"/>
+        <rect x="266" y="60" width="32" height="32" rx="7" fill="url(#agrad-adapter)" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="282" y="82" text-anchor="middle" font-size="14">🦞</text>
+        <text x="308" y="76" font-size="11.5" font-weight="700" fill="#1e293b">OpenClaw</text>
+        <text x="308" y="92" font-size="9" fill="#94a3b8">openclaw.ai</text>
+        <a href="https://openclaw.ai/" target="_blank" rel="noopener">
+          <rect x="400" y="60" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" opacity="0.7"/>
+          <text x="407" y="71" text-anchor="middle" font-size="8" fill="#94a3b8">↗</text>
+        </a>
+
+        <!-- Agent 3: JiuwenClaw -->
+        <rect x="470" y="54" width="185" height="56" rx="9" fill="url(#agrad-agent)" stroke="#cbd5e1" stroke-width="1.2" filter="url(#af0)"/>
+        <rect x="476" y="60" width="32" height="32" rx="7" fill="#1e293b" stroke="#475569" stroke-width="0.8"/>
+        <text x="492" y="82" text-anchor="middle" font-size="14" fill="#fbbf24">⚡</text>
+        <text x="518" y="76" font-size="11.5" font-weight="700" fill="#1e293b">JiuwenClaw</text>
+        <text x="518" y="92" font-size="9" fill="#94a3b8">openjiuwen.com</text>
+        <a href="https://openjiuwen.com/en/jiuwenclaw" target="_blank" rel="noopener">
+          <rect x="610" y="60" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" opacity="0.7"/>
+          <text x="617" y="71" text-anchor="middle" font-size="8" fill="#94a3b8">↗</text>
+        </a>
+
+        <!-- Agent 4: Hermes Agent -->
+        <rect x="680" y="54" width="190" height="56" rx="9" fill="url(#agrad-agent)" stroke="#cbd5e1" stroke-width="1.2" filter="url(#af0)"/>
+        <rect x="686" y="60" width="32" height="32" rx="7" fill="#7c3aed"/>
+        <text x="702" y="82" text-anchor="middle" font-size="14" fill="#fff">🏛</text>
+        <text x="728" y="76" font-size="11.5" font-weight="700" fill="#1e293b">Hermes Agent</text>
+        <text x="728" y="92" font-size="9" fill="#94a3b8">nousresearch.com</text>
+        <a href="https://hermes-agent.nousresearch.com/" target="_blank" rel="noopener">
+          <rect x="820" y="60" width="14" height="14" rx="3" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.8" opacity="0.7"/>
+          <text x="827" y="71" text-anchor="middle" font-size="8" fill="#94a3b8">↗</text>
+        </a>
+
+        <!-- Down arrows from 4 agents converging to adapter -->
+        <path d="M 142 110 L 142 135 L 410 135 L 410 158" stroke="#6366f1" stroke-width="1.3" fill="none" marker-end="url(#adn)" opacity="0.5"/>
+        <path d="M 352 110 L 352 148 L 410 148 L 410 158" stroke="#6366f1" stroke-width="1.3" fill="none" marker-end="url(#adn)" opacity="0.5"/>
+        <path d="M 562 110 L 562 148 L 510 148 L 510 158" stroke="#6366f1" stroke-width="1.3" fill="none" marker-end="url(#adn)" opacity="0.5"/>
+        <path d="M 775 110 L 775 135 L 510 135 L 510 158" stroke="#6366f1" stroke-width="1.3" fill="none" marker-end="url(#adn)" opacity="0.5"/>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAYER 2: 适配层 (y: 160–230) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <rect x="80" y="160" width="760" height="72" rx="11" fill="url(#agrad-adapter)" stroke="#bfdbfe" stroke-width="2" filter="url(#af1)"/>
+        <text x="106" y="188" font-size="13" font-weight="800" fill="#1d4ed8">🔗 适配层 (Adapter Layer)</text>
+        <text x="106" y="208" font-size="10.5" fill="#3b82f6">统一事件格式 · 协议转换 · Hook 注册 · 多 Agent 运行时接入</text>
+        <!-- Sub-capsules -->
+        <rect x="510" y="174" width="120" height="22" rx="5" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="570" y="189" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="600">Hook 注册</text>
+        <rect x="640" y="174" width="110" height="22" rx="5" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="695" y="189" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="600">事件标准化</text>
+        <rect x="760" y="174" width="65" height="22" rx="5" fill="#fff" stroke="#bfdbfe" stroke-width="1"/>
+        <text x="792" y="189" text-anchor="middle" font-size="10" fill="#1d4ed8" font-weight="600">插件 SD</text>
+
+        <!-- Arrow Layer 2 → Layer 3 -->
+        <line x1="460" y1="232" x2="460" y2="268" stroke="#8b5cf6" stroke-width="2" marker-end="url(#adn)"/>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAYER 3: Agent 行为中间表示层 (y: 270–380) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <rect x="80" y="270" width="760" height="112" rx="11" fill="url(#agrad-ir)" stroke="#c4b5fd" stroke-width="2" filter="url(#af1)"/>
+        <text x="106" y="296" font-size="13" font-weight="800" fill="#6d28d9">📊 Agent 行为中间表示层 (Intermediate Representation Layer)</text>
+        <text x="106" y="314" font-size="10.5" fill="#7c3aed">将异构 Agent 行为统一建模为结构化中间表示，支持跨 Agent 关联分析</text>
+
+        <!-- Sub-box: 状态迁移图 -->
+        <rect x="106" y="328" width="220" height="44" rx="8" fill="#fff" stroke="#ddd6fe" stroke-width="1.2"/>
+        <text x="216" y="348" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">🔄 状态迁移图</text>
+        <text x="216" y="364" text-anchor="middle" font-size="9.5" fill="#8b5cf6">State Transition Graph</text>
+
+        <!-- Sub-box: PDG 图 -->
+        <rect x="350" y="328" width="220" height="44" rx="8" fill="#fff" stroke="#ddd6fe" stroke-width="1.2"/>
+        <text x="460" y="348" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">📈 PDG 图</text>
+        <text x="460" y="364" text-anchor="middle" font-size="9.5" fill="#8b5cf6">Program Dependence Graph</text>
+
+        <!-- Sub-box: 调用拓扑 -->
+        <rect x="594" y="328" width="220" height="44" rx="8" fill="#fff" stroke="#ddd6fe" stroke-width="1.2"/>
+        <text x="704" y="348" text-anchor="middle" font-size="12" font-weight="700" fill="#6d28d9">🔗 调用拓扑</text>
+        <text x="704" y="364" text-anchor="middle" font-size="9.5" fill="#8b5cf6">Call Topology & Trace</text>
+
+        <!-- Arrow Layer 3 → Layer 4 -->
+        <line x1="460" y1="382" x2="460" y2="418" stroke="#f97316" stroke-width="2" marker-end="url(#adn)"/>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAYER 4: 多层行为分析引擎 (y: 420–510) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <rect x="80" y="420" width="760" height="92" rx="11" fill="url(#agrad-analysis)" stroke="#fdba74" stroke-width="2" filter="url(#af1)"/>
+        <text x="106" y="446" font-size="13" font-weight="800" fill="#c2410c">🔍 多层行为分析引擎</text>
+        <text x="106" y="464" font-size="10.5" fill="#ea580c">基于中间表示的深度行为分析，多维度检测 Agent 安全威胁</text>
+
+        <!-- Analysis modules -->
+        <rect x="106" y="474" width="158" height="28" rx="6" fill="#fff" stroke="#fed7aa" stroke-width="1"/>
+        <text x="185" y="492" text-anchor="middle" font-size="11" font-weight="700" fill="#c2410c">🛡️ 注入检测</text>
+        <rect x="280" y="474" width="158" height="28" rx="6" fill="#fff" stroke="#fed7aa" stroke-width="1"/>
+        <text x="359" y="492" text-anchor="middle" font-size="11" font-weight="700" fill="#c2410c">💻 命令审查</text>
+        <rect x="454" y="474" width="158" height="28" rx="6" fill="#fff" stroke="#fed7aa" stroke-width="1"/>
+        <text x="533" y="492" text-anchor="middle" font-size="11" font-weight="700" fill="#c2410c">📂 路径扫描</text>
+        <rect x="628" y="474" width="158" height="28" rx="6" fill="#fff" stroke="#fed7aa" stroke-width="1"/>
+        <text x="707" y="492" text-anchor="middle" font-size="11" font-weight="700" fill="#c2410c">🔑 密钥匹配</text>
+
+        <!-- Arrow Layer 4 → Layer 5 -->
+        <line x1="460" y1="512" x2="460" y2="548" stroke="#10b981" stroke-width="2" marker-end="url(#adn)"/>
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAYER 5: 多层威胁防护 (y: 550–630) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <rect x="80" y="550" width="760" height="82" rx="11" fill="url(#agrad-defense)" stroke="#6ee7b7" stroke-width="2" filter="url(#af1)"/>
+        <text x="106" y="576" font-size="13" font-weight="800" fill="#059669">🛡️ 多层 Agent 威胁防护</text>
+        <text x="106" y="596" font-size="10.5" fill="#10b981">实时阻断 · 风险告警 · 审计追溯 · 策略联动</text>
+
+        <!-- Defense verdicts -->
+        <rect x="350" y="564" width="120" height="36" rx="8" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1.5"/>
+        <text x="410" y="579" text-anchor="middle" font-size="18">✅</text>
+        <text x="410" y="595" text-anchor="middle" font-size="10.5" font-weight="800" fill="#059669">allow</text>
+
+        <rect x="500" y="564" width="120" height="36" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+        <text x="560" y="579" text-anchor="middle" font-size="18">⚠️</text>
+        <text x="560" y="595" text-anchor="middle" font-size="10.5" font-weight="800" fill="#d97706">require_approval</text>
+
+        <rect x="650" y="564" width="120" height="36" rx="8" fill="#fef2f2" stroke="#fca5a5" stroke-width="1.5"/>
+        <text x="710" y="579" text-anchor="middle" font-size="18">🚫</text>
+        <text x="710" y="595" text-anchor="middle" font-size="10.5" font-weight="800" fill="#dc2626">block</text>
+
+        <!-- Vertical layer labels on the left -->
+        <text x="30" y="196" font-size="8.5" fill="#94a3b8" font-weight="600" transform="rotate(-90 30 196)">数据流入</text>
+        <text x="30" y="328" font-size="8.5" fill="#94a3b8" font-weight="600" transform="rotate(-90 30 328)">中间表示</text>
+        <text x="30" y="466" font-size="8.5" fill="#94a3b8" font-weight="600" transform="rotate(-90 30 466)">行为分析</text>
+        <text x="30" y="592" font-size="8.5" fill="#94a3b8" font-weight="600" transform="rotate(-90 30 592)">威胁防护</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 架构图 -->
+  <div class="section">
+    <div class="section-title">🏗️ 敏感数据流向监控</div>
+    <div class="flow-svg-wrapper">
+      <svg class="flow-svg" viewBox="0 0 780 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="fs" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/></filter>
+          <marker id="ag" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#10b981"/></marker>
+          <marker id="ar" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker>
+          <marker id="ab" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#3b82f6"/></marker>
+          <marker id="aa" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#f59e0b"/></marker>
+          <linearGradient id="gs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ecfdf5"/><stop offset="1" stop-color="#d1fae5"/></linearGradient>
+          <linearGradient id="gd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fef2f2"/><stop offset="1" stop-color="#fee2e2"/></linearGradient>
+          <linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eff6ff"/><stop offset="1" stop-color="#dbeafe"/></linearGradient>
+          <linearGradient id="ga" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fffbeb"/><stop offset="1" stop-color="#fef3c7"/></linearGradient>
+          <linearGradient id="gp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5f3ff"/><stop offset="1" stop-color="#ede9fe"/></linearGradient>
+        </defs>
+        <rect x="0" y="0" width="780" height="380" rx="14" fill="transparent"/>
+
+        <!-- User Input -->
+        <rect x="20" y="30" width="140" height="52" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="90" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">👤 用户输入</text>
+        <text x="90" y="70" text-anchor="middle" font-size="10" fill="#94a3b8">User Prompt / 外部数据</text>
+
+        <!-- Agent LLM -->
+        <rect x="230" y="30" width="150" height="52" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="305" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">🧠 Agent / LLM</text>
+        <text x="305" y="70" text-anchor="middle" font-size="10" fill="#94a3b8">模型推理 & 工具编排</text>
+
+        <!-- Tool Output -->
+        <rect x="450" y="30" width="150" height="52" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="525" y="52" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">⚙️ 工具输出</text>
+        <text x="525" y="70" text-anchor="middle" font-size="10" fill="#94a3b8">bash / file / network</text>
+
+        <!-- Sensitive Data -->
+        <rect x="640" y="30" width="120" height="52" rx="10" fill="url(#gd)" stroke="#fca5a5" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="700" y="52" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">⚠️ 敏感数据</text>
+        <text x="700" y="70" text-anchor="middle" font-size="10" fill="#ef4444">密钥 / token / 内网</text>
+
+        <!-- Arrows top row -->
+        <line x1="160" y1="56" x2="228" y2="56" stroke="#3b82f6" stroke-width="1.8" marker-end="url(#ab)"/>
+        <line x1="380" y1="56" x2="448" y2="56" stroke="#3b82f6" stroke-width="1.8" marker-end="url(#ab)"/>
+        <line x1="600" y1="56" x2="638" y2="56" stroke="#ef4444" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#ar)"/>
+
+        <!-- AgentMoss Monitor -->
+        <rect x="200" y="130" width="380" height="58" rx="12" fill="url(#gm)" stroke="#bfdbfe" stroke-width="2" filter="url(#fs)"/>
+        <text x="390" y="153" text-anchor="middle" font-size="14" font-weight="800" fill="#1d4ed8">🌿 AgentMoss 安全监测引擎</text>
+        <text x="390" y="174" text-anchor="middle" font-size="11" fill="#3b82f6">注入检测 · 命令审查 · 路径扫描 · 密钥匹配 · 网络策略</text>
+
+        <!-- Down arrows to monitor -->
+        <path d="M 305 82 L 305 128" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ab)" fill="none"/>
+        <path d="M 525 82 L 525 128" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#ab)" fill="none"/>
+        <path d="M 90 82 L 90 108 L 330 108 L 330 128" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" fill="none"/>
+
+        <!-- Safe Path -->
+        <rect x="40" y="240" width="160" height="50" rx="10" fill="url(#gs)" stroke="#a7f3d0" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="120" y="262" text-anchor="middle" font-size="24">✅</text>
+        <text x="120" y="282" text-anchor="middle" font-size="12" font-weight="700" fill="#059669">安全放行</text>
+
+        <!-- Arrow to Safe -->
+        <path d="M 230 188 L 230 220 L 120 220 L 120 238" stroke="#10b981" stroke-width="1.8" marker-end="url(#ag)" fill="none"/>
+
+        <!-- Policy Engine -->
+        <rect x="250" y="240" width="280" height="50" rx="10" fill="url(#gp)" stroke="#c4b5fd" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="390" y="262" text-anchor="middle" font-size="14" font-weight="800" fill="#7c3aed">🛡️ 策略引擎裁决</text>
+        <text x="390" y="282" text-anchor="middle" font-size="11" fill="#8b5cf6">block · require_approval · allow</text>
+
+        <!-- Arrow to Policy -->
+        <path d="M 390 188 L 390 238" stroke="#8b5cf6" stroke-width="2" marker-end="url(#ab)" fill="none"/>
+
+        <!-- Blocked -->
+        <rect x="580" y="240" width="160" height="50" rx="10" fill="url(#gd)" stroke="#fca5a5" stroke-width="1.5" filter="url(#fs)"/>
+        <text x="660" y="262" text-anchor="middle" font-size="24">🚫</text>
+        <text x="660" y="282" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">已阻断</text>
+
+        <!-- Arrow to Blocked -->
+        <path d="M 530 265 L 578 265" stroke="#ef4444" stroke-width="1.8" marker-end="url(#ar)" fill="none"/>
+
+        <!-- Policy to Safe -->
+        <line x1="250" y1="265" x2="202" y2="265" stroke="#10b981" stroke-width="1.5" marker-end="url(#ag)"/>
+
+        <!-- Danger flow -->
+        <path d="M 640 82 L 640 150 L 720 150 L 720 238" stroke="#ef4444" stroke-width="1.2" stroke-dasharray="6,4" fill="none" opacity="0.4"/>
+        <circle r="5" fill="#ef4444" opacity="0.7">
+          <animateMotion dur="3s" repeatCount="indefinite" path="M 640 82 L 640 150 L 720 150 L 720 238"/>
+        </circle>
+
+        <!-- Alert -->
+        <rect x="600" y="310" width="140" height="38" rx="8" fill="url(#ga)" stroke="#fcd34d" stroke-width="1.2" filter="url(#fs)"/>
+        <text x="670" y="334" text-anchor="middle" font-size="12" font-weight="700" fill="#d97706">🔔 安全告警</text>
+
+        <!-- Blocked to Alert -->
+        <path d="M 660 290 L 660 308" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#aa)" fill="none"/>
+
+        <!-- Annotations -->
+        <text x="195" y="105" font-size="9" fill="#94a3b8" font-style="italic">🔍 所有 Agent 行为实时采集</text>
+        <text x="20" y="340" font-size="10" fill="#64748b">💡 正常数据流经安全检查后放行；敏感操作（密钥泄露、</text>
+        <text x="20" y="358" font-size="10" fill="#64748b">路径穿透、危险命令）被策略引擎阻断并触发告警。</text>
+
+        <!-- Animated dots -->
+        <circle r="3" fill="#3b82f6" opacity="0.6"><animateMotion dur="2s" repeatCount="indefinite" path="M 160 56 L 228 56"/></circle>
+        <circle r="3" fill="#3b82f6" opacity="0.6"><animateMotion dur="2.5s" repeatCount="indefinite" path="M 380 56 L 448 56"/></circle>
+        <circle r="3.5" fill="#1d4ed8" opacity="0.7"><animateMotion dur="2s" repeatCount="indefinite" path="M 305 82 L 305 128"/></circle>
+        <circle r="3.5" fill="#1d4ed8" opacity="0.7"><animateMotion dur="2.2s" repeatCount="indefinite" path="M 525 82 L 525 128"/></circle>
+        <circle r="3" fill="#8b5cf6" opacity="0.6"><animateMotion dur="2s" repeatCount="indefinite" path="M 390 188 L 390 238"/></circle>
+        <circle r="3" fill="#10b981" opacity="0.6"><animateMotion dur="2.5s" repeatCount="indefinite" path="M 250 265 L 202 265"/></circle>
+        <circle r="3" fill="#ef4444" opacity="0.6"><animateMotion dur="2.2s" repeatCount="indefinite" path="M 530 265 L 578 265"/></circle>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 全局关联分析 -->
+  <div class="section">
+    <div class="section-title">🔗 全局 Agent 行为关联分析</div>
+    <div class="flow-svg-wrapper">
+      <svg class="flow-svg" viewBox="0 0 860 380" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id="fs2" x="-10%" y="-10%" width="130%" height="130%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/></filter>
+          <marker id="agc" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#6366f1"/></marker>
+          <marker id="ar2" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#ef4444"/></marker>
+          <linearGradient id="gs2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eff6ff"/><stop offset="1" stop-color="#dbeafe"/></linearGradient>
+          <linearGradient id="gp2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f5f3ff"/><stop offset="1" stop-color="#ede9fe"/></linearGradient>
+          <linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecfdf5"/><stop offset="1" stop-color="#d1fae5"/></linearGradient>
+        </defs>
+        <rect x="0" y="0" width="860" height="380" rx="14" fill="transparent"/>
+
+        <!-- Session A -->
+        <rect x="20" y="20" width="150" height="44" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="95" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">🅰️ Agent Session A</text>
+        <text x="95" y="56" text-anchor="middle" font-size="9" fill="#94a3b8">用户对话 + 工具调用</text>
+
+        <!-- Session B -->
+        <rect x="20" y="90" width="150" height="44" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="95" y="110" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">🅱️ Agent Session B</text>
+        <text x="95" y="126" text-anchor="middle" font-size="9" fill="#94a3b8">文件操作 + 网络请求</text>
+
+        <!-- Session C -->
+        <rect x="20" y="160" width="150" height="44" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="95" y="180" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">🅲 Agent Session C</text>
+        <text x="95" y="196" text-anchor="middle" font-size="9" fill="#94a3b8">数据库查询 + 代码执行</text>
+
+        <!-- Event Collector -->
+        <rect x="230" y="55" width="160" height="110" rx="12" fill="url(#gs2)" stroke="#bfdbfe" stroke-width="2" filter="url(#fs2)"/>
+        <text x="310" y="80" text-anchor="middle" font-size="13" font-weight="800" fill="#1d4ed8">📡 事件总线</text>
+        <text x="310" y="98" text-anchor="middle" font-size="10" fill="#3b82f6">实时采集 · 统一格式</text>
+        <text x="310" y="116" text-anchor="middle" font-size="10" fill="#3b82f6">时间戳对齐 · 会话关联</text>
+        <text x="310" y="134" text-anchor="middle" font-size="10" fill="#3b82f6">parent_id 拓扑记录</text>
+        <text x="310" y="152" text-anchor="middle" font-size="10" fill="#3b82f6">run_id / session_id 索引</text>
+
+        <!-- Arrows Sessions → Bus -->
+        <line x1="170" y1="42" x2="228" y2="70" stroke="#6366f1" stroke-width="1.2" marker-end="url(#agc)"/>
+        <line x1="170" y1="112" x2="228" y2="100" stroke="#6366f1" stroke-width="1.2" marker-end="url(#agc)"/>
+        <line x1="170" y1="182" x2="228" y2="130" stroke="#6366f1" stroke-width="1.2" marker-end="url(#agc)"/>
+
+        <!-- Correlation Engine -->
+        <rect x="450" y="55" width="180" height="110" rx="12" fill="url(#gp2)" stroke="#c4b5fd" stroke-width="2" filter="url(#fs2)"/>
+        <text x="540" y="80" text-anchor="middle" font-size="13" font-weight="800" fill="#7c3aed">🧩 关联分析引擎</text>
+        <text x="540" y="100" text-anchor="middle" font-size="10" fill="#8b5cf6">跨会话事件关联</text>
+        <text x="540" y="118" text-anchor="middle" font-size="10" fill="#8b5cf6">证据链自动构建</text>
+        <text x="540" y="136" text-anchor="middle" font-size="10" fill="#8b5cf6">攻击链路追溯 (trace)</text>
+        <text x="540" y="154" text-anchor="middle" font-size="10" fill="#8b5cf6">风险评分聚合</text>
+
+        <!-- Arrow Bus → Correlation -->
+        <line x1="390" y1="110" x2="448" y2="110" stroke="#8b5cf6" stroke-width="1.8" marker-end="url(#agc)"/>
+
+        <!-- Evidence Chain -->
+        <rect x="690" y="35" width="140" height="44" rx="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="760" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">📋 证据链 A</text>
+        <text x="760" y="71" text-anchor="middle" font-size="9" fill="#94a3b8">Session A · prompt→cmd</text>
+
+        <rect x="690" y="95" width="140" height="44" rx="10" fill="#fff" stroke="#e2e8f0" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="760" y="115" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">📋 证据链 B</text>
+        <text x="760" y="131" text-anchor="middle" font-size="9" fill="#94a3b8">Session B · file→network</text>
+
+        <rect x="690" y="155" width="140" height="44" rx="10" fill="#fff" stroke="#fca5a5" stroke-width="1.5" filter="url(#fs2)"/>
+        <text x="760" y="175" text-anchor="middle" font-size="12" font-weight="700" fill="#dc2626">🚨 跨会话攻击链</text>
+        <text x="760" y="191" text-anchor="middle" font-size="9" fill="#ef4444">A→C 联合利用</text>
+
+        <!-- Arrows Correlation → Evidence -->
+        <path d="M 615 70 L 655 70 L 655 57 L 688 57" stroke="#6366f1" stroke-width="1.2" fill="none" marker-end="url(#agc)"/>
+        <path d="M 615 100 L 655 100 L 655 117 L 688 117" stroke="#6366f1" stroke-width="1.2" fill="none" marker-end="url(#agc)"/>
+        <path d="M 615 130 L 655 130 L 655 177 L 688 177" stroke="#ef4444" stroke-width="1.4" stroke-dasharray="5,3" fill="none" marker-end="url(#ar2)"/>
+
+        <!-- Annotated cross-session red line -->
+        <path d="M 230 230 L 440 250 L 520 270 L 690 270 L 730 198" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="8,4" fill="none" opacity="0.5"/>
+        <text x="445" y="258" font-size="9" fill="#ef4444" font-weight="700">跨会话关联威胁</text>
+
+        <!-- Bottom Annotations -->
+        <rect x="20" y="300" width="820" height="65" rx="10" fill="url(#gg)" stroke="#a7f3d0" stroke-width="1.2" filter="url(#fs2)"/>
+        <text x="430" y="322" text-anchor="middle" font-size="13" font-weight="800" fill="#059669">🔍 关联分析能力概览</text>
+        <text x="430" y="344" text-anchor="middle" font-size="11" fill="#475569">多 Agent 会话事件统一采集 → 时序对齐与拓扑关联 → 证据链自动构建 → 跨会话攻击链路追溯 → 全局风险评分</text>
+      </svg>
+    </div>
+  </div>
+
+  <!-- 核心能力 -->
+  <div class="section">
+    <div class="section-title">✨ 核心能力</div>
+    <div class="features">
+      <div class="feature">
+        <div class="feat-icon">🛡️</div>
+        <div class="feat-title">实时监控面板</div>
+        <div class="feat-desc">Agent 运行状态、事件流、安全告警实时呈现，支持事件详情展开与证据链可视化。</div>
+      </div>
+      <div class="feature">
+        <div class="feat-icon">🔍</div>
+        <div class="feat-title">Prompt 注入检测</div>
+        <div class="feat-desc">内置多维度注入检测引擎，覆盖越狱、系统提示泄露、忽略指令等攻击手法。</div>
+      </div>
+      <div class="feature">
+        <div class="feat-icon">🔑</div>
+        <div class="feat-title">密钥匹配</div>
+        <div class="feat-desc">覆盖 19 类密钥 regex，实时扫描 Agent 输入/输出中的 API Key、Token、密码等敏感信息。</div>
+      </div>
+      <div class="feature">
+        <div class="feat-icon">📂</div>
+        <div class="feat-title">敏感路径扫描</div>
+        <div class="feat-desc">对文件读写操作进行路径安全审查，拦截 /etc/passwd、~/.ssh、.env 等敏感文件的访问。</div>
+      </div>
+      <div class="feature">
+        <div class="feat-icon">🌐</div>
+        <div class="feat-title">网络策略审计</div>
+        <div class="feat-desc">对网络请求进行安全审计，检测 raw IP 访问、内网地址、黑名单 URL 等风险行为。</div>
+      </div>
+      <div class="feature">
+        <div class="feat-icon">📊</div>
+        <div class="feat-title">全链路 Trace</div>
+        <div class="feat-desc">基于 parent_id / run_id / session_id 构建完整调用拓扑，实现 Agent 行为全链路可观测。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 技术规格 -->
+  <div class="section">
+    <div class="section-title">📐 技术规格</div>
+    <div class="spec-list">
+      <div class="spec-item"><span class="spec-icon">⚡</span><div><strong>超低延迟</strong><span style="color:var(--text-muted);font-size:12px;">p50 < 2ms</span></div></div>
+      <div class="spec-item"><span class="spec-icon">📦</span><div><strong>轻量嵌入</strong><span style="color:var(--text-muted);font-size:12px;">纯 TypeScript，零外部运行时依赖</span></div></div>
+      <div class="spec-item"><span class="spec-icon">🔌</span><div><strong>Hook 体系</strong><span style="color:var(--text-muted);font-size:12px;">6 个生命周期钩子无缝接入</span></div></div>
+      <div class="spec-item"><span class="spec-icon">📋</span><div><strong>策略引擎</strong><span style="color:var(--text-muted);font-size:12px;">block / require_approval / allow 三级裁决</span></div></div>
+      <div class="spec-item"><span class="spec-icon">🌊</span><div><strong>SSE 推送</strong><span style="color:var(--text-muted);font-size:12px;">实时事件流推送至监控面板</span></div></div>
+      <div class="spec-item"><span class="spec-icon">🔗</span><div><strong>证据链</strong><span style="color:var(--text-muted);font-size:12px;">自动构建攻击证据链，支持回溯分析</span></div></div>
+    </div>
+  </div>
+
+  <!-- 在 OpenClaw 注册 AgentMoss -->
+  <div class="section">
+    <div class="section-title">🔌 在 OpenClaw 注册 AgentMoss</div>
+    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">推荐使用一键配置脚本 <strong>setup-agentmoss.sh</strong>，自动将 AgentMoss 安全引擎注册到 OpenClaw 插件体系中，无需手动编辑 JSON。</p>
+
+    <!-- 方式一：一键脚本 -->
+    <div class="subsection">
+      <div class="subsection-title">🚀 方式一：一键配置脚本（推荐）</div>
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">下载并运行脚本，自动修改 <code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;">~/.openclaw/openclaw.json</code>，完成注册：</p>
+      <div class="code-block" style="margin-bottom:8px;">
+<span class="lang-tag">bash</span><span class="cmt"># 下载并执行一键配置脚本（默认端口 19877）</span>
+curl -fsSL https://agentmosi.github.io/setup-agentmoss.sh | bash
+
+<span class="cmt"># 可选参数：自定义端口 / 监控地址 / 纯审计模式 / 预览</span>
+curl -fsSL https://agentmosi.github.io/setup-agentmoss.sh | bash -s -- -p 19876
+curl -fsSL https://agentmosi.github.io/setup-agentmoss.sh | bash -s -- --audit-only
+curl -fsSL https://agentmosi.github.io/setup-agentmoss.sh | bash -s -- --dry-run
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:16px;">
+        <tr style="border-bottom:1px solid var(--border-light);"><td style="padding:6px 0;font-weight:700;white-space:nowrap;">-p, --port</td><td style="padding:6px 0;color:var(--text-secondary);">指定 AgentMoss 端口（默认 19877）</td></tr>
+        <tr style="border-bottom:1px solid var(--border-light);"><td style="padding:6px 0;font-weight:700;white-space:nowrap;">-u, --url</td><td style="padding:6px 0;color:var(--text-secondary);">自定义完整 monitorUrl</td></tr>
+        <tr style="border-bottom:1px solid var(--border-light);"><td style="padding:6px 0;font-weight:700;white-space:nowrap;">--fail-open</td><td style="padding:6px 0;color:var(--text-secondary);">监控不可用时放行（默认 <code>fail-closed</code> 阻断）</td></tr>
+        <tr style="border-bottom:1px solid var(--border-light);"><td style="padding:6px 0;font-weight:700;white-space:nowrap;">--audit-only</td><td style="padding:6px 0;color:var(--text-secondary);">仅审计模式，不阻断实际调用</td></tr>
+        <tr style="border-bottom:1px solid var(--border-light);"><td style="padding:6px 0;font-weight:700;white-space:nowrap;">--dry-run</td><td style="padding:6px 0;color:var(--text-secondary);">预览变更，不修改文件</td></tr>
+      </table>
+    </div>
+
+    <!-- 方式二：手动配置 -->
+    <div class="subsection">
+      <div class="subsection-title">📝 方式二：手动编辑 JSON（备选）</div>
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px;">在 OpenClaw 配置文件 <code style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:12px;">openclaw.json</code> 的 <code>plugins</code> 段中添加以下内容：</p>
+      <div class="code-block">
+<span class="lang-tag">openclaw.json</span><span class="brack">{</span>
+  <span class="key">"plugins"</span><span class="brack">:</span> <span class="brack">{</span>
+    <span class="key">"entries"</span><span class="brack">:</span> <span class="brack">{</span>
+      <span class="key">"agentmoss"</span><span class="brack">:</span> <span class="brack">{</span>
+        <span class="key">"enabled"</span><span class="brack">:</span> <span class="bool">true</span><span class="brack">,</span>
+        <span class="cmt">// ⬇️ AgentMoss 安全监测服务地址</span>
+        <span class="key">"config"</span><span class="brack">:</span> <span class="brack">{</span>
+          <span class="key">"monitorUrl"</span><span class="brack">:</span>      <span class="str">"http://127.0.0.1:19877"</span><span class="brack">,</span>
+          <span class="key">"timeoutMs"</span><span class="brack">:</span>        <span class="num">80</span><span class="brack">,</span>                 <span class="cmt">// 实时检查超时，建议 ≤ 100ms</span>
+          <span class="key">"failClosedOnError"</span><span class="brack">:</span> <span class="bool">true</span><span class="brack">,</span>  <span class="cmt">// 监控不可用时阻断工具调用</span>
+          <span class="key">"observeHooks"</span><span class="brack">:</span>      <span class="bool">true</span><span class="brack">,</span>  <span class="cmt">// 采集模型输入输出、工具结果等观察事件</span>
+          <span class="key">"auditOnly"</span><span class="brack">:</span>        <span class="bool">false</span>   <span class="cmt">// 关闭纯审计模式，真正执行阻断</span>
+        <span class="brack">}</span>
+      <span class="brack">}</span>
+    <span class="brack">}</span><span class="brack">,</span>
+    <span class="key">"allow"</span><span class="brack">:</span> <span class="brack">[</span><span class="str">"agentmoss"</span><span class="brack">,</span> <span class="cmt">/* 其他插件 ... */</span><span class="brack">]</span>
+  <span class="brack">}</span>
+<span class="brack">}</span>
+      </div>
+    </div>
+
+    <p style="color:var(--text-muted);font-size:12px;margin-top:12px;line-height:1.7;">💡 注册后 OpenClaw 会在 <strong>before_tool_call</strong> 钩子将工具调用参数发送给 AgentMoss 安全引擎；引擎依据安全规则库执行注入检测、密钥匹配、路径扫描等策略，返回 <code>allow</code> / <code>block</code> / <code>require_approval</code> 三级裁决；高风险操作被实时阻断并触发告警。</p>
+  </div>
+
+  <footer class="paper-footer" aria-label="论文">
+    <strong>论文预览：<a href="https://www.preprints.org/manuscript/202604.1029" target="_blank" rel="noopener">AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking</a></strong>
+    <span>（论文介绍了MOSS的子技术，使用形式化方法抽象agent状态迁移系统，使用模型检测技术验证安全性质）</span>
+  </footer>
+
+</div>
+</body>
+</html>

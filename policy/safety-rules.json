@@ -1,0 +1,226 @@
+{
+  "version": "1.0.0",
+  "description": "AgentMonitor 安全策略规则配置 - 修改后自动热更新",
+  "rules": [
+    {
+      "id": "cmd.rm_rf",
+      "name": "递归强制删除",
+      "description": "检测 rm -rf 递归强制删除命令",
+      "severity": "critical",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 1,
+      "match": {
+        "toolNames": ["bash", "shell", "exec", "terminal", "run", "execute_command", "shell_exec"],
+        "commandPatterns": ["\\brm\\s+-[^\\n]*r[^\\n]*f\\b|\\brm\\s+-[^\\n]*f[^\\n]*r\\b"]
+      },
+      "action": "block",
+      "actionReason": "检测到递归强制删除命令。"
+    },
+    {
+      "id": "cmd.remote_pipe_exec",
+      "name": "远程管道执行",
+      "description": "检测 curl/wget 远程下载内容直接管道执行",
+      "severity": "critical",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 2,
+      "match": {
+        "toolNames": ["bash", "shell", "exec", "terminal", "run", "execute_command", "shell_exec"],
+        "commandPatterns": ["(curl|wget)\\b.+\\|\\s*(sh|bash|zsh|python|node)\\b"]
+      },
+      "action": "block",
+      "actionReason": "检测到远程下载内容直接管道执行。"
+    },
+    {
+      "id": "cmd.shell_metachar",
+      "name": "Shell 元字符/重定向",
+      "description": "检测 Shell 元字符、命令替换或 I/O 重定向",
+      "severity": "warning",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 10,
+      "match": {
+        "toolNames": ["bash", "shell", "exec", "terminal", "run", "execute_command", "shell_exec"],
+        "commandPatterns": ["[;&|`]|(\\$\\(\\()|(\\b2>&1\\b)|>\\s*\\/|<\\s*\\/"]
+      },
+      "action": "require_approval",
+      "actionReason": "检测到 Shell 元字符或重定向。"
+    },
+    {
+      "id": "cmd.host_mutation",
+      "name": "主机状态破坏",
+      "description": "检测可能破坏主机状态的命令 (chmod 777, sudo, dd, mkfs, shutdown, reboot)",
+      "severity": "critical",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 3,
+      "match": {
+        "toolNames": ["bash", "shell", "exec", "terminal", "run", "execute_command", "shell_exec"],
+        "commandPatterns": ["\\b(chmod\\s+777|sudo\\s+|dd\\s+if=|mkfs|shutdown|reboot)\\b"]
+      },
+      "action": "block",
+      "actionReason": "检测到可能破坏主机状态的命令。"
+    },
+    {
+      "id": "file.path_traversal",
+      "name": "路径穿越",
+      "description": "检测 ../ 路径穿越模式",
+      "severity": "critical",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 4,
+      "match": {
+        "toolNames": ["read", "write_to_file", "replace_in_file", "read_file", "execute_command", "bash", "shell"],
+        "pathPatterns": ["(^|\\/)\\.\\.(\\/|$)|%2e%2e"]
+      },
+      "action": "block",
+      "actionReason": "检测到路径穿越模式。"
+    },
+    {
+      "id": "file.secret_path",
+      "name": "敏感文件路径",
+      "description": "检测访问敏感本地文件 (.env, SSH 密钥, AWS 凭证, cookies, /etc/passwd 等)",
+      "severity": "critical",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 5,
+      "match": {
+        "toolNames": ["read", "write_to_file", "replace_in_file", "read_file", "execute_command", "bash", "shell"],
+        "pathPatterns": ["(\\.env|id_rsa|id_ed25519|\\.aws\\/credentials|cookies\\.sqlite|\\/etc\\/passwd|\\/proc\\/\\d+\\/environ)"]
+      },
+      "action": "block",
+      "actionReason": "检测到敏感本地文件路径。"
+    },
+    {
+      "id": "file.system_path",
+      "name": "系统路径访问",
+      "description": "检测访问系统关键路径 (/System, /private, /etc, /var, C:\\Windows)",
+      "severity": "warning",
+      "category": "malicious_tool_call",
+      "enabled": true,
+      "priority": 11,
+      "match": {
+        "toolNames": ["read", "write_to_file", "replace_in_file", "read_file", "execute_command", "bash", "shell"],
+        "pathPatterns": ["^(\\/System|\\/private|\\/etc|\\/var|C:\\\\Windows)"]
+      },
+      "action": "require_approval",
+      "actionReason": "检测到系统路径访问。"
+    },
+    {
+      "id": "net.private_target",
+      "name": "私有网络目标",
+      "description": "检测出站 URL 指向私有网络或本机回环地址",
+      "severity": "critical",
+      "category": "data_leakage",
+      "enabled": true,
+      "priority": 6,
+      "match": {
+        "toolNames": ["fetch", "curl", "wget", "http_request", "network_request", "execute_command"],
+        "paramPatterns": [
+          { "field": "url", "pattern": "private_ip" }
+        ]
+      },
+      "action": "block",
+      "actionReason": "检测到私有网络或本机回环目标。"
+    },
+    {
+      "id": "net.secret_in_query",
+      "name": "URL 密钥泄漏",
+      "description": "检测出站 URL 查询参数携带密钥类信息",
+      "severity": "critical",
+      "category": "data_leakage",
+      "enabled": true,
+      "priority": 7,
+      "match": {
+        "toolNames": ["fetch", "curl", "wget", "http_request", "network_request", "execute_command"],
+        "paramPatterns": [
+          { "field": "url", "pattern": "secret_in_query" }
+        ]
+      },
+      "action": "block",
+      "actionReason": "检测到出站 URL 携带密钥类查询参数。"
+    },
+    {
+      "id": "net.plaintext",
+      "name": "非加密连接",
+      "description": "检测非 HTTPS 出站 URL",
+      "severity": "warning",
+      "category": "data_leakage",
+      "enabled": true,
+      "priority": 12,
+      "match": {
+        "toolNames": ["fetch", "curl", "wget", "http_request", "network_request", "execute_command"],
+        "paramPatterns": [
+          { "field": "url", "pattern": "plaintext" }
+        ]
+      },
+      "action": "require_approval",
+      "actionReason": "检测到非 HTTPS 出站 URL。"
+    },
+    {
+      "id": "prompt.injection_ignore",
+      "name": "提示注入 - 忽略指令",
+      "description": "检测 'ignore previous instructions' 等提示注入语言",
+      "severity": "critical",
+      "category": "prompt_injection",
+      "enabled": true,
+      "priority": 8,
+      "match": {
+        "paramPatterns": [
+          { "field": "*", "pattern": "ignore\\s+(all\\s+)?previous\\s+(instructions?|rules?)" },
+          { "field": "*", "pattern": "disregard\\s+(all\\s+)?(previous|prior)\\s+(instructions?|rules?)" }
+        ]
+      },
+      "action": "block",
+      "actionReason": "检测到工具参数中的提示注入语言。"
+    },
+    {
+      "id": "prompt.injection_roleplay",
+      "name": "提示注入 - 角色扮演",
+      "description": "检测 'you are now a' 'act as a' 等角色扮演注入",
+      "severity": "warning",
+      "category": "prompt_injection",
+      "enabled": true,
+      "priority": 13,
+      "match": {
+        "paramPatterns": [
+          { "field": "*", "pattern": "you\\s+are\\s+now\\s+" },
+          { "field": "*", "pattern": "do\\s+anything\\s+now" },
+          { "field": "*", "pattern": "jailbreak" }
+        ]
+      },
+      "action": "require_approval",
+      "actionReason": "检测到工具参数中的提示注入语言。"
+    },
+    {
+      "id": "prompt.injection_tag_spoof",
+      "name": "提示注入 - 标签欺骗",
+      "description": "检测 <system> [System Message] 等系统标签欺骗",
+      "severity": "critical",
+      "category": "prompt_injection",
+      "enabled": true,
+      "priority": 9,
+      "match": {
+        "paramPatterns": [
+          { "field": "*", "pattern": "<\\s*system\\s*>" },
+          { "field": "*", "pattern": "system\\s*prompt" }
+        ]
+      },
+      "action": "block",
+      "actionReason": "检测到工具参数中的提示注入语言。"
+    },
+    {
+      "id": "data.secret_like",
+      "name": "密钥/敏感信息检测",
+      "description": "检测参数中是否包含密钥或个人敏感信息模式",
+      "severity": "critical",
+      "category": "data_leakage",
+      "enabled": true,
+      "priority": 14,
+      "match": {},
+      "action": "block",
+      "actionReason": "检测到密钥或个人敏感信息模式。"
+    }
+  ]
+}

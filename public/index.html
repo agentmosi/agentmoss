@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentMoss · Agent行为全链路监控与安全分析</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --surface: #ffffff;
+    --surface-alt: #fafbfd;
+    --surface-hover: #f3f5f9;
+    --border: #e8ebf2;
+    --border-light: #f0f2f7;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --accent-soft: #818cf8;
+    --accent-light: #eef2ff;
+    --accent-ring: #c7d2fe;
+    --accent-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a78bfa 100%);
+    --green: #10b981; --green-soft: #34d399; --green-bg: #ecfdf5; --green-ring: #a7f3d0;
+    --amber: #f59e0b; --amber-soft: #fbbf24; --amber-bg: #fffbeb; --amber-ring: #fde68a;
+    --red: #ef4444; --red-soft: #f87171; --red-bg: #fef2f2; --red-ring: #fecaca;
+    --purple: #8b5cf6; --info: #3b82f6; --info-bg: #eff6ff;
+    --shadow-xs: 0 1px 2px rgba(15,23,42,0.04);
+    --shadow-sm: 0 1px 3px rgba(15,23,42,0.05);
+    --shadow: 0 4px 6px rgba(15,23,42,0.04), 0 2px 4px rgba(15,23,42,0.03);
+    --shadow-lg: 0 12px 32px rgba(15,23,42,0.08), 0 4px 12px rgba(15,23,42,0.04);
+    --radius-xs: 6px; --radius-sm: 10px; --radius: 14px; --radius-lg: 18px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse 70% 50% at 20% 10%, rgba(99,102,241,0.025) 0%, transparent 50%),
+                radial-gradient(ellipse 50% 40% at 85% 85%, rgba(139,92,246,0.025) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    height: 56px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 20px; position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    background: rgba(255,255,255,0.8); border-bottom: 1px solid rgba(232,235,242,0.8);
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }
+  .topbar-brand .logo { width: 32px; height: 32px; background: var(--accent-gradient); border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center; font-size: 15px; color: #fff; }
+  .topbar-brand span { background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .status-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px rgba(16,185,129,0.4); animation: pulse 2.5s infinite; }
+  .status-dot.connecting::before { background: var(--amber); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.5; transform:scale(0.8); } }
+  .btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: var(--radius-xs); padding: 6px 12px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; transition: all var(--transition); white-space: nowrap; }
+  .btn:hover { background: var(--surface-hover); border-color: #c8cfe0; }
+  .btn-primary { background: var(--accent-gradient); color: #fff; border: none; box-shadow: 0 2px 8px rgba(99,102,241,0.25); }
+  .btn-primary:hover { box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+  .btn-sm { padding: 4px 10px; font-size: 11.5px; }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
+  .btn-ghost:hover { background: var(--surface-hover); border-color: var(--border); }
+  .btn-danger-ghost { background: transparent; border-color: transparent; color: var(--red-soft); }
+  .btn-danger-ghost:hover { background: var(--red-bg); border-color: var(--red-ring); color: var(--red); }
+
+  /* ── Metric Row ── */
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 14px 20px;
+    position: relative;
+    z-index: 1;
+  }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: all var(--transition);
+    position: relative;
+    overflow: hidden;
+  }
+  .metric-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: var(--accent-gradient);
+    opacity: 0;
+    transition: opacity var(--transition);
+  }
+  .metric-card:hover { border-color: #c8cfe0; box-shadow: var(--shadow-sm); }
+  .metric-card:hover::before { opacity: 1; }
+  .metric-card.blocked::before { background: linear-gradient(135deg, #ef4444, #f87171); opacity: 1; }
+  .metric-card.warn::before { background: linear-gradient(135deg, #f59e0b, #fbbf24); opacity: 1; }
+  .metric-card .metric-value {
+    font-size: 26px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .metric-card .metric-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .metric-card .metric-icon {
+    position: absolute;
+    right: 16px;
+    top: 14px;
+    font-size: 24px;
+    opacity: 0.15;
+    pointer-events: none;
+  }
+
+  /* ── Badge Row ── */
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px 14px;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+  .badge-row .badge-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-right: 4px;
+  }
+  .badge-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    border-radius: 999px;
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 11.5px;
+    font-weight: 600;
+    font-family: inherit;
+    transition: all var(--transition);
+    white-space: nowrap;
+  }
+  .badge-btn:hover { background: var(--surface-hover); border-color: #c8cfe0; }
+  .badge-btn.active-badge { background: var(--accent-light); color: var(--accent); border-color: var(--accent-ring); }
+  .badge-btn.danger-badge { color: var(--red-soft); }
+  .badge-btn.danger-badge.active-badge { background: var(--red-bg); color: var(--red); border-color: var(--red-ring); }
+  .badge-btn .badge-count { font-weight: 800; font-variant-numeric: tabular-nums; }
+
+  /* ── Three-Column Layout ── */
+  .layout { display: flex; height: calc(100vh - 56px - 128px); position: relative; z-index: 1; }
+  .col-sessions { width: 288px; flex-shrink: 0; border-right: 1px solid var(--border-light); background: var(--surface); display: flex; flex-direction: column; }
+  .col-events { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .col-analysis { width: 400px; flex-shrink: 0; border-left: 1px solid var(--border-light); background: var(--surface); display: flex; flex-direction: column; }
+
+  /* ── Column Header ── */
+  .col-header { height: 46px; padding: 0 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 13px; flex-shrink: 0; background: var(--surface-alt); }
+
+  /* ── Session List ── */
+  .session-list { flex: 1; overflow-y: auto; }
+  .session-item { padding: 12px 16px; border-bottom: 1px solid var(--border-light); cursor: pointer; transition: all var(--transition); position: relative; }
+  .session-item:hover { background: var(--surface-hover); }
+  .session-item.active { background: var(--accent-light); border-left: 3px solid var(--accent); }
+  .session-item .s-label { font-weight: 700; font-size: 13px; margin-bottom: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .session-item .s-meta { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .session-item .s-stats { display: flex; gap: 10px; font-size: 11px; }
+  .session-item .s-stat { display: flex; align-items: center; gap: 3px; }
+  .s-stat.risk { color: var(--red); } .s-stat.block { color: var(--red); } .s-stat.events { color: var(--text-secondary); }
+  .s-status { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+  .s-status.active { background: var(--green); box-shadow: 0 0 6px rgba(16,185,129,0.4); }
+  .s-status.completed { background: var(--text-muted); }
+  .s-status.aborted { background: var(--amber); }
+
+  /* ── Event List ── */
+  .event-list-container { flex: 1; overflow-y: auto; padding: 8px 12px; }
+  .event-item { position: relative; background: var(--surface); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 6px; cursor: pointer; border: 1px solid var(--border-light); transition: all var(--transition); display: flex; align-items: flex-start; gap: 12px; }
+  .event-item:hover { border-color: #c8cfe0; box-shadow: var(--shadow-sm); }
+  .event-item.selected { border-color: var(--accent-ring); background: var(--accent-light); }
+  .event-item.blocked { border-left: 3px solid var(--red); }
+  .event-avatar { width: 34px; height: 34px; border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .event-avatar.tool { background: #ede9fe; color: #7c3aed; } .event-avatar.llm { background: #dbeafe; color: #2563eb; }
+  .event-avatar.network { background: #fce7f3; color: #db2777; } .event-avatar.file { background: #d1fae5; color: #059669; }
+  .event-avatar.alert { background: #fee2e2; color: #dc2626; } .event-avatar.system { background: #f3f4f6; color: #6b7280; }
+  .event-body { flex: 1; min-width: 0; }
+  .event-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .event-type { font-weight: 700; font-size: 12.5px; }
+  .event-time { font-size: 11px; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .event-summary { font-size: 11.5px; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .event-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+  .tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700; }
+  .tag-block { background: var(--red-bg); color: var(--red); } .tag-approval { background: var(--amber-bg); color: var(--amber); }
+  .tag-risk-crit { background: #fce7f3; color: #be185d; } .tag-risk-high { background: var(--red-bg); color: #dc2626; }
+  .tag-risk-mid { background: var(--amber-bg); color: #d97706; } .tag-risk-low { background: #f0fdf4; color: #16a34a; }
+  .tag-tool { background: var(--surface-alt); color: var(--text-secondary); border: 1px solid var(--border-light); }
+
+  /* ── Analysis Panel ── */
+  .analysis-scroll { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .analysis-card { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 14px; }
+  .analysis-card h4 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { background: var(--surface-alt); border-radius: var(--radius-sm); padding: 10px 12px; text-align: center; }
+  .kpi .kpi-value { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .kpi .kpi-label { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+  .kpi.danger .kpi-value { color: var(--red); } .kpi.warn .kpi-value { color: var(--amber); } .kpi.info .kpi-value { color: var(--info); }
+
+  .finding-item { padding: 8px 12px; border-radius: var(--radius-xs); margin-bottom: 6px; font-size: 12px; }
+  .finding-item.critical { background: var(--red-bg); border-left: 3px solid var(--red); }
+  .finding-item.warning { background: var(--amber-bg); border-left: 3px solid var(--amber); }
+  .finding-item.info { background: var(--info-bg); border-left: 3px solid var(--info); }
+  .finding-score { font-weight: 800; margin-right: 6px; }
+
+  .chain-node { position: relative; padding: 8px 10px 8px 28px; border-left: 2px solid var(--border); font-size: 12px; }
+  .chain-node:last-child { border-left-color: transparent; }
+  .chain-node::before { content: ""; position: absolute; left: -5px; top: 13px; width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .chain-node.root::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+  .chain-node .cn-type { color: var(--accent); font-weight: 700; }
+  .chain-node .cn-risk { display: inline-block; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; margin-left: 6px; }
+
+  /* ── Empty / Placeholder ── */
+  .empty-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--text-muted); text-align: center; gap: 10px; flex: 1; }
+  .empty-placeholder .empty-icon { font-size: 40px; opacity: 0.4; }
+  .empty-placeholder .empty-text { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+
+  /* ── Filter Bar ── */
+  .filter-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border-light); background: var(--surface); }
+  .filter-bar select { border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 4px 10px; font-size: 11.5px; background: var(--surface); color: var(--text); font-family: inherit; font-weight: 500; cursor: pointer; }
+
+  /* ── Modal ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 100; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); max-width: 640px; width: 95%; max-height: 80vh; overflow: hidden; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+  .modal-header { height: 48px; padding: 0 18px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; font-weight: 700; background: var(--surface-alt); }
+  .modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-muted); padding: 4px 8px; border-radius: var(--radius-xs); }
+  .modal-close:hover { background: var(--surface-hover); }
+  .modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+  .detail-grid { display: grid; grid-template-columns: 100px 1fr; gap: 8px 14px; font-size: 12.5px; margin-bottom: 16px; }
+  .detail-grid dt { color: var(--text-muted); font-weight: 600; text-align: right; }
+  .payload-block { background: #f8f9fc; border: 1px solid var(--border-light); border-radius: var(--radius-sm); padding: 12px; font-family: "SF Mono", Menlo, monospace; font-size: 11.5px; white-space: pre-wrap; max-height: 220px; overflow-y: auto; }
+
+  .paper-footer {
+    margin: 28px 20px 20px;
+    padding: 14px 18px;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    background: rgba(255,255,255,0.86);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.7;
+    position: relative;
+    z-index: 1;
+  }
+  .paper-footer a { color: var(--accent); font-weight: 700; text-decoration: none; }
+  .paper-footer a:hover { text-decoration: underline; }
+
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d4d8e3; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a0a8ba; }
+
+  [data-tooltip] { position: relative; }
+  [data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 4px 10px; border-radius: var(--radius-xs); font-size: 11px; white-space: nowrap; z-index: 60; pointer-events: none; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-brand"><div class="logo">🌿</div><span>AgentMoss</span></div>
+  <div class="topbar-right">
+    <a href="/about" class="btn btn-sm">🌿 关于 AgentMoss</a>
+    <span class="status-dot connecting" id="connectionStatus">连接中…</span>
+    <button class="btn btn-sm btn-primary" id="demoSeedBtn">🎲 演示数据</button>
+    <button class="btn btn-sm btn-ghost" id="clearAllBtn" data-tooltip="清除数据库中所有演示数据">🗑️ 清除</button>
+    <button class="btn btn-sm btn-ghost" id="refreshBtn" data-tooltip="刷新数据">🔄</button>
+  </div>
+</header>
+
+<div class="metric-row" id="metricRow">
+  <div class="metric-card" id="mcTotal">
+    <span class="metric-icon">📊</span>
+    <div class="metric-value">0</div>
+    <div class="metric-label">总计事件</div>
+  </div>
+  <div class="metric-card blocked" id="mcBlocked">
+    <span class="metric-icon">🛡️</span>
+    <div class="metric-value">0</div>
+    <div class="metric-label">已阻断</div>
+  </div>
+  <div class="metric-card warn" id="mcApproval">
+    <span class="metric-icon">⏳</span>
+    <div class="metric-value">0</div>
+    <div class="metric-label">需审批</div>
+  </div>
+  <div class="metric-card" id="mcRisk">
+    <span class="metric-icon">⚠️</span>
+    <div class="metric-value">0</div>
+    <div class="metric-label">最高风险分</div>
+  </div>
+</div>
+
+<div class="badge-row" id="badgeRow">
+  <span class="badge-label">分类：</span>
+</div>
+
+<div class="layout">
+  <!-- ═══ Column 1: Session List ═══ -->
+  <div class="col-sessions">
+    <div class="col-header">📋 会话列表</div>
+    <div class="session-list" id="sessionList">
+      <div class="empty-placeholder">
+        <div class="empty-icon">📡</div>
+        <div class="empty-text">暂无会话</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Column 2: Event Timeline ═══ -->
+  <div class="col-events">
+    <div class="col-header">
+      <span>📜 事件时间线</span>
+      <span style="font-size:11px;color:var(--text-muted);font-weight:500;" id="eventCount">0 事件</span>
+    </div>
+    <div class="filter-bar">
+      <select id="typeFilter"><option value="">全部类型</option></select>
+      <select id="sevFilter">
+        <option value="">全部风险</option>
+        <option value="critical">严重</option>
+        <option value="high">高</option>
+        <option value="medium">中</option>
+        <option value="low">低</option>
+      </select>
+    </div>
+    <div class="event-list-container" id="eventList">
+      <div class="empty-placeholder">
+        <div class="empty-icon">👈</div>
+        <div class="empty-text">选择左侧会话查看事件</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Column 3: Behavior Analysis ═══ -->
+  <div class="col-analysis">
+    <div class="col-header">🔍 行为分析</div>
+    <div class="analysis-scroll" id="analysisPanel">
+      <div class="empty-placeholder">
+        <div class="empty-icon">📊</div>
+        <div class="empty-text">选择会话和事件查看分析</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="paper-footer" aria-label="计划发表的论文">
+  <strong>计划发表的论文：</strong>
+  <a href="https://www.preprints.org/manuscript/202604.1029" target="_blank" rel="noopener">AgentMoss Preprint</a>
+  <span>我们计划发表的论文系统化介绍了 AgentMoss 的设计动机、运行时监控架构与 Agent 安全评估方法。</span>
+</footer>
+
+<!-- Event Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header"><span>📋 事件详情</span><button class="modal-close" onclick="closeModal()">×</button></div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+const API = "/api";
+const SSE_URL = "/api/stream";
+const DEMO_SEED = "/api/demo/seed";
+
+var runs = [];
+var selectedRunId = "";
+var events = [];
+var selectedEventId = "";
+var analysisData = null;
+var sseSource = null;
+
+// ── SSE ──
+function connectSSE() {
+  if (sseSource) sseSource.close();
+  sseSource = new EventSource(SSE_URL);
+  sseSource.addEventListener("ready", function() { updateConnection("connected"); });
+  sseSource.addEventListener("event", function(e) {
+    try {
+      var msg = JSON.parse(e.data);
+      if (msg.event && selectedRunId && msg.event.runId === selectedRunId) {
+        events.unshift(msg.event);
+        renderEvents();
+      }
+      fetchRuns();
+    } catch (ex) {}
+  });
+  sseSource.addEventListener("decision", function(e) {
+    try {
+      var msg = JSON.parse(e.data);
+      if (msg.event && selectedRunId && msg.event.runId === selectedRunId) {
+        events.unshift(msg.event);
+        renderEvents();
+      }
+      fetchRuns();
+    } catch (ex) {}
+  });
+  sseSource.addEventListener("system", function() { fetchRuns(); });
+  sseSource.onerror = function() { updateConnection("connecting"); };
+}
+function updateConnection(status) {
+  var el = document.getElementById("connectionStatus");
+  el.className = "status-dot " + status;
+  el.textContent = status === "connected" ? "已连接" : "连接中…";
+}
+
+// ── Fetch ──
+function fetchRuns() {
+  fetch(API + "/runs").then(function(r) { return r.json(); }).then(function(data) {
+    runs = data.runs || [];
+    updateMetrics();
+    renderSessions();
+  }).catch(function() {});
+}
+function fetchEvents(runId) {
+  fetch(API + "/runs/" + runId + "/events?limit=500").then(function(r) { return r.json(); }).then(function(data) {
+    events = data.events || [];
+    updateMetrics();
+    renderEvents();
+  }).catch(function() { events = []; updateMetrics(); renderEvents(); });
+}
+function fetchAnalysis(runId) {
+  Promise.all([
+    fetch(API + "/runs/" + runId + "/graph?limit=200").then(function(r) { return r.json(); }),
+    fetch(API + "/runs/" + runId + "/evidence-chains").then(function(r) { return r.json(); })
+  ]).then(function(results) {
+    analysisData = { graph: results[0], chains: (results[1].chains || []) };
+  }).catch(function() {
+    analysisData = { graph: null, chains: [] };
+  }).then(function() { renderAnalysis(); });
+}
+function generateEvidenceChain(rootEventId) {
+  if (!selectedRunId || !rootEventId) return;
+  fetch(API + "/runs/" + selectedRunId + "/evidence-chain", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rootEventId: rootEventId })
+  }).then(function() { return fetchAnalysis(selectedRunId); }).catch(function(err) { console.error(err); });
+}
+
+// ── Metrics ──
+function updateMetrics() {
+  if (!runs.length) {
+    document.querySelectorAll(".metric-card .metric-value").forEach(function(el) { el.textContent = "0"; });
+    document.getElementById("badgeRow").innerHTML = '<span class="badge-label">分类：</span>';
+    return;
+  }
+  var totalEvents = 0, totalBlocked = 0, totalApproval = 0, maxRisk = 0;
+  var typeCounts = {};
+  runs.forEach(function(r) {
+    totalEvents += r.eventCount || 0;
+    totalBlocked += r.blockCount || 0;
+    totalApproval += r.approvalCount || 0;
+    if (r.maxRiskScore > maxRisk) maxRisk = r.maxRiskScore;
+  });
+  document.querySelector("#mcTotal .metric-value").textContent = totalEvents;
+  document.querySelector("#mcBlocked .metric-value").textContent = totalBlocked;
+  document.querySelector("#mcApproval .metric-value").textContent = totalApproval;
+  document.querySelector("#mcRisk .metric-value").textContent = maxRisk;
+
+  // Build type badges from events across all runs — if we have events loaded
+  if (events.length > 0) {
+    events.forEach(function(e) {
+      var t = e.eventType;
+      if (t) typeCounts[t] = (typeCounts[t] || 0) + 1;
+    });
+  }
+
+  var badgeHtml = '<span class="badge-label">分类：</span>';
+  var typeKeys = Object.keys(typeCounts).sort(function(a, b) { return typeCounts[b] - typeCounts[a]; });
+  typeKeys.forEach(function(t) {
+    var lbl = eventLabel(t);
+    badgeHtml += '<button class="badge-btn" data-type="' + esc(t) + '">' + lbl.icon + ' ' + esc(lbl.label) + ' <span class="badge-count">' + typeCounts[t] + '</span></button>';
+  });
+  document.getElementById("badgeRow").innerHTML = badgeHtml;
+
+  // Wire badge click to filter events
+  document.querySelectorAll("#badgeRow .badge-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var t = this.dataset.type;
+      var typeSel = document.getElementById("typeFilter");
+      typeSel.value = t || "";
+      // Select the first session that has events if none is selected
+      if (!selectedRunId && runs.length > 0) {
+        selectRun(runs[0].runId);
+      }
+      renderEvents();
+    });
+  });
+}
+
+// ── Render Sessions ──
+function renderSessions() {
+  var container = document.getElementById("sessionList");
+  if (!runs.length) {
+    container.innerHTML = '<div class="empty-placeholder"><div class="empty-icon">📡</div><div class="empty-text">暂无会话</div></div>';
+    return;
+  }
+  container.innerHTML = runs.map(function(r) {
+    var date = new Date(r.startTime).toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    var isActive = r.runId === selectedRunId;
+    return '<div class="session-item' + (isActive ? ' active' : '') + '" data-run="' + esc(r.runId) + '">'
+      + '<div class="s-label">' + esc(r.label || r.runId) + '</div>'
+      + '<div class="s-meta"><span class="s-status ' + esc(r.status) + '"></span><span>' + esc(date) + '</span><span>' + esc(r.agentId || '—') + '</span></div>'
+      + '<div class="s-stats"><span class="s-stat events">📊 ' + (r.eventCount || 0) + '</span><span class="s-stat risk">⚠️ ' + (r.riskCount || 0) + '</span><span class="s-stat block">🚫 ' + (r.blockCount || 0) + '</span></div>'
+      + '</div>';
+  }).join("");
+
+  container.querySelectorAll(".session-item").forEach(function(el) {
+    el.addEventListener("click", function() { selectRun(el.dataset.run); });
+  });
+}
+
+function selectRun(runId) {
+  selectedRunId = runId;
+  selectedEventId = "";
+  analysisData = null;
+  renderSessions();
+  renderAnalysis();
+  document.getElementById("eventCount").textContent = "加载中…";
+  document.getElementById("eventList").innerHTML = '<div class="empty-placeholder"><div class="empty-icon">⏳</div><div class="empty-text">加载事件…</div></div>';
+  Promise.all([fetchEvents(runId), fetchAnalysis(runId)]);
+}
+
+// ── Render Events ──
+function getFilteredEvents() {
+  var typeFilter = document.getElementById("typeFilter").value;
+  var sevFilter = document.getElementById("sevFilter").value;
+  return events.filter(function(e) {
+    if (typeFilter && e.eventType !== typeFilter) return false;
+    if (sevFilter) {
+      var s = e.riskScore || 0;
+      if (sevFilter === "critical" && s < 90) return false;
+      if (sevFilter === "high" && (s < 70 || s >= 90)) return false;
+      if (sevFilter === "medium" && (s < 30 || s >= 70)) return false;
+      if (sevFilter === "low" && s >= 30) return false;
+    }
+    return true;
+  });
+}
+
+function renderEvents() {
+  var container = document.getElementById("eventList");
+  var filtered = getFilteredEvents().reverse();
+  document.getElementById("eventCount").textContent = filtered.length + " 事件";
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-placeholder"><div class="empty-icon">📭</div><div class="empty-text">此会话暂无事件</div></div>';
+    return;
+  }
+
+  // Populate type filter options dynamically
+  var typeSel = document.getElementById("typeFilter");
+  if (typeSel.options.length <= 1) {
+    var types = {};
+    events.forEach(function(e) { types[e.eventType] = true; });
+    Object.keys(types).sort().forEach(function(t) {
+      var o = document.createElement("option");
+      o.value = t;
+      o.textContent = eventLabel(t).label;
+      typeSel.appendChild(o);
+    });
+  }
+
+  container.innerHTML = filtered.map(function(e) {
+    var lbl = eventLabel(e.eventType);
+    var cls = avatarClass(e);
+    var time = e.ts ? new Date(e.ts).toLocaleTimeString("zh-CN", { hour12: false }) : "—";
+    var blockClass = e.decision === "block" ? " blocked" : "";
+    var selClass = e.eventId === selectedEventId ? " selected" : "";
+    var tags = [];
+    if (e.toolName) tags.push('<span class="tag tag-tool">' + esc(e.toolName) + '</span>');
+    if (e.decision === "block") tags.push('<span class="tag tag-block">🚫 阻断</span>');
+    if (e.decision === "require_approval") tags.push('<span class="tag tag-approval">⏳ 审批</span>');
+    var rl = riskTag(e.riskScore);
+    if (rl) tags.push('<span class="tag ' + rl.cls + '">' + rl.label + '</span>');
+    var summary = summarizeEvent(e);
+    return '<div class="event-item' + blockClass + selClass + '" data-event="' + esc(e.eventId) + '">'
+      + '<div class="event-avatar ' + cls + '">' + lbl.icon + '</div>'
+      + '<div class="event-body">'
+      + '<div class="event-header"><span class="event-type">' + esc(lbl.label) + '</span><span class="event-time">' + esc(time) + '</span></div>'
+      + '<div class="event-summary">' + esc(summary) + '</div>'
+      + '<div class="event-meta">' + tags.join("") + '</div>'
+      + '</div></div>';
+  }).join("");
+
+  container.querySelectorAll(".event-item").forEach(function(el) {
+    el.addEventListener("click", function() { selectEvent(el.dataset.event); });
+    el.addEventListener("dblclick", function() { openDetail(el.dataset.event); });
+  });
+}
+
+function selectEvent(eventId) {
+  selectedEventId = eventId;
+  renderEvents();
+  renderAnalysis();
+}
+
+// ── Render Analysis ──
+function renderAnalysis() {
+  var panel = document.getElementById("analysisPanel");
+  if (!selectedRunId) {
+    panel.innerHTML = '<div class="empty-placeholder"><div class="empty-icon">📊</div><div class="empty-text">选择会话和事件查看分析</div></div>';
+    return;
+  }
+
+  var run = null;
+  for (var i = 0; i < runs.length; i++) {
+    if (runs[i].runId === selectedRunId) { run = runs[i]; break; }
+  }
+  var selectedEvent = null;
+  for (var j = 0; j < events.length; j++) {
+    if (events[j].eventId === selectedEventId) { selectedEvent = events[j]; break; }
+  }
+
+  var html = "";
+
+  // KPI Summary
+  if (run) {
+    html += '<div class="analysis-card">'
+      + '<h4>📈 会话概览</h4>'
+      + '<div class="kpi-grid">'
+      + '<div class="kpi"><div class="kpi-value">' + (run.eventCount || 0) + '</div><div class="kpi-label">总事件</div></div>'
+      + '<div class="kpi danger"><div class="kpi-value">' + (run.blockCount || 0) + '</div><div class="kpi-label">已阻断</div></div>'
+      + '<div class="kpi warn"><div class="kpi-value">' + (run.riskCount || 0) + '</div><div class="kpi-label">风险事件</div></div>'
+      + '<div class="kpi info"><div class="kpi-value">' + (run.maxRiskScore || 0) + '</div><div class="kpi-label">最高风险分</div></div>'
+      + '</div></div>';
+  }
+
+  // Selected Event Detail
+  if (selectedEvent) {
+    var lbl = eventLabel(selectedEvent.eventType);
+    var findings = extractFindings(selectedEvent);
+    html += '<div class="analysis-card">'
+      + '<h4>🔎 选中事件</h4>'
+      + '<div style="font-size:12px;margin-bottom:8px;"><strong>' + esc(lbl.label) + '</strong> · 风险分 ' + (selectedEvent.riskScore || 0) + '</div>'
+      + '<div style="font-size:11.5px;color:var(--text-secondary);margin-bottom:8px;">' + esc(summarizeEvent(selectedEvent)) + '</div>';
+
+    if (selectedEvent.decision === "block") {
+      html += '<div class="finding-item critical"><span class="finding-score">🚫 已阻断</span> ' + esc(selectedEvent.reason || "安全策略拦截") + '</div>';
+    } else if (selectedEvent.decision === "require_approval") {
+      html += '<div class="finding-item warning"><span class="finding-score">⏳ 待审批</span> ' + esc(selectedEvent.reason || "需要人工审核") + '</div>';
+    }
+
+    if (findings.length > 0) {
+      html += '<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--text-muted);">策略发现</div>';
+      findings.forEach(function(f) {
+        html += '<div class="finding-item ' + esc(f.severity) + '"><span class="finding-score">' + f.score + '</span> ' + esc(f.message) + '</div>';
+      });
+    }
+    html += '</div>';
+
+    // Generate evidence chain button
+    html += '<div class="analysis-card">'
+      + '<h4>🔗 证据链</h4>'
+      + '<button class="btn btn-sm" onclick="generateEvidenceChain(\'' + esc(selectedEvent.eventId) + '\')">从此事件生成证据链</button>'
+      + '</div>';
+  } else if (run) {
+    html += '<div class="analysis-card">'
+      + '<h4>💡 提示</h4>'
+      + '<div style="font-size:12px;color:var(--text-secondary);">点击中间栏的事件可查看详细分析</div>'
+      + '</div>';
+  }
+
+  // Evidence Chains
+  if (analysisData && analysisData.chains && analysisData.chains.length > 0) {
+    var latestChain = analysisData.chains[0];
+    html += '<div class="analysis-card">'
+      + '<h4>🔗 最新证据链 (' + analysisData.chains.length + ')</h4>';
+    latestChain.evidenceNodes.forEach(function(n) {
+      var isRoot = n.eventId === latestChain.rootEventId;
+      var sevCls = n.riskLevel === "critical" ? "tag-risk-crit" : n.riskLevel === "warning" ? "tag-risk-high" : "tag-risk-low";
+      html += '<div class="chain-node' + (isRoot ? " root" : "") + '">'
+        + '<span class="cn-type">' + esc(n.eventType) + '</span>'
+        + '<span class="cn-risk ' + sevCls + '">' + n.riskScore + '</span>'
+        + '<div style="color:var(--text-secondary);font-size:11px;">' + esc((n.summary || "").substring(0, 80)) + '</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  } else if (analysisData && analysisData.chains) {
+    html += '<div class="analysis-card"><h4>🔗 证据链</h4><div style="font-size:12px;color:var(--text-muted);">暂无证据链，点击事件生成</div></div>';
+  }
+
+  // Behavior Graph — State Transition Diagram
+  if (analysisData && analysisData.graph && analysisData.graph.nodes) {
+    html += '<div class="analysis-card">'
+      + '<h4>🕸️ 行为图谱 · 状态迁移图</h4>'
+      + '<div id="stateGraphContainer" style="overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-surface);padding:12px;"></div>'
+      + '</div>';
+  }
+
+  panel.innerHTML = html;
+
+  // Render SVG state graph after DOM update
+  if (analysisData && analysisData.graph && analysisData.graph.nodes) {
+    drawStateGraph(analysisData.graph);
+  }
+}
+
+// ── State Transition Diagram Renderer ──
+function drawStateGraph(g) {
+  var container = document.getElementById("stateGraphContainer");
+  if (!container || !g.nodes.length) return;
+
+  var nodeMap = {};
+  g.nodes.forEach(function(n) { nodeMap[n.nodeId] = n; });
+
+  var sorted = g.nodes.slice().sort(function(a, b) { return (a.createdAt || 0) - (b.createdAt || 0); });
+  var nodeIdx = {};
+  sorted.forEach(function(n, i) { nodeIdx[n.nodeId] = i; });
+
+  var nodeW = 100, nodeH = 56;
+  var gapX = 50;
+  var cols = Math.min(sorted.length, 8);
+  var rows = Math.ceil(sorted.length / cols);
+  var svgW = cols * (nodeW + gapX) + gapX;
+  var svgH = rows * (nodeH + 30) + 40;
+
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + svgW + '" height="' + svgH + '" style="display:block;">';
+  svg += '<defs><marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/></marker></defs>';
+
+  // Draw edges
+  g.edges.forEach(function(e) {
+    var si = nodeIdx[e.sourceId], ti = nodeIdx[e.targetId];
+    if (si === undefined || ti === undefined) return;
+    var sx = (si % cols) * (nodeW + gapX) + gapX + nodeW;
+    var sy = Math.floor(si / cols) * (nodeH + 30) + 20 + nodeH / 2;
+    var tx = (ti % cols) * (nodeW + gapX) + gapX;
+    var ty = Math.floor(ti / cols) * (nodeH + 30) + 20 + nodeH / 2;
+    var ec = "#9ca3af";
+    if (e.edgeType === "MITIGATES") ec = "#ef4444";
+    else if (e.edgeType === "CAUSED_BY") ec = "#f59e0b";
+    else if (e.edgeType === "MODIFIES") ec = "#8b5cf6";
+    var midX = (sx + tx) / 2;
+    svg += '<path d="M' + sx + ',' + sy + ' C' + midX + ',' + sy + ' ' + midX + ',' + ty + ' ' + tx + ',' + ty + '" fill="none" stroke="' + ec + '" stroke-width="1.8" marker-end="url(#arrowhead)" opacity="0.7"/>';
+  });
+
+  // Draw nodes
+  sorted.forEach(function(n, i) {
+    var x = (i % cols) * (nodeW + gapX) + gapX;
+    var y = Math.floor(i / cols) * (nodeH + 30) + 20;
+    var rx = 8;
+    var fill = "#1e293b", stroke = "#475569", textColor = "#e2e8f0";
+    if (n.decision === "block") { fill = "#7f1d1d"; stroke = "#ef4444"; }
+    else if (n.riskScore >= 70) { fill = "#78350f"; stroke = "#f59e0b"; }
+    else if (n.nodeType === "PolicyDecision") { fill = "#1e3a5f"; stroke = "#3b82f6"; }
+    else if (n.nodeType === "LLMOutput" || n.nodeType === "LLMInput") { fill = "#312e81"; stroke = "#6366f1"; }
+
+    svg += '<rect x="' + x + '" y="' + y + '" width="' + nodeW + '" height="' + nodeH + '" rx="' + rx + '" ry="' + rx + '" fill="' + fill + '" stroke="' + stroke + '" stroke-width="2" style="cursor:pointer;" onclick="selectEventById(\'' + esc(n.eventId || "") + '\')"/>';
+    var label = (n.label || n.nodeType || "").substring(0, 16);
+    svg += '<text x="' + (x + nodeW / 2) + '" y="' + (y + 20) + '" text-anchor="middle" fill="' + textColor + '" font-size="10" font-weight="600">' + esc(label) + '</text>';
+    var sub = "";
+    if (n.decision === "block") sub = "已阻断";
+    else if (n.riskScore >= 70) sub = "风险:" + n.riskScore;
+    else sub = (n.nodeType || "").substring(0, 12);
+    svg += '<text x="' + (x + nodeW / 2) + '" y="' + (y + 40) + '" text-anchor="middle" fill="#94a3b8" font-size="9">' + esc(sub) + '</text>';
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+function selectEventById(eventId) {
+  if (!eventId) return;
+  selectedEventId = eventId;
+  renderEvents();
+  renderAnalysis();
+}
+
+function extractFindings(event) {
+  var findings = [];
+  var p = event.redactedPayload;
+  if (p && Array.isArray(p.findings)) {
+    p.findings.forEach(function(f) {
+      findings.push({ severity: f.severity || "info", score: f.score || 0, message: f.message || "" });
+    });
+  }
+  return findings;
+}
+
+// ── Helpers ──
+function eventLabel(type) {
+  var map = {
+    llm_input: { icon: "🧠", label: "LLM 输入" },
+    llm_output: { icon: "💬", label: "LLM 输出" },
+    tool_call: { icon: "⚙️", label: "工具调用" },
+    tool_result: { icon: "📤", label: "工具结果" },
+    file_read: { icon: "📖", label: "文件读取" },
+    file_write: { icon: "✏️", label: "文件写入" },
+    network_request: { icon: "🌐", label: "网络请求" },
+    message_received: { icon: "📩", label: "消息接收" },
+    message_sending: { icon: "📨", label: "消息发送" },
+    alert: { icon: "🔔", label: "安全告警" },
+    run_start: { icon: "▶️", label: "开始" },
+    run_end: { icon: "⏹️", label: "结束" },
+    session_start: { icon: "🔌", label: "会话开始" },
+    session_end: { icon: "🔌", label: "会话结束" },
+    prompt_build: { icon: "📝", label: "提示词构建" },
+    policy_decision: { icon: "🛡️", label: "策略判决" }
+  };
+  return map[type] || { icon: "📋", label: type };
+}
+function avatarClass(e) {
+  if (e.eventType === "alert" || e.decision === "block") return "alert";
+  if (e.eventType && e.eventType.indexOf("llm") >= 0) return "llm";
+  if (e.eventType && e.eventType.indexOf("tool") >= 0) return "tool";
+  if (e.eventType && e.eventType.indexOf("file") >= 0) return "file";
+  if (e.eventType && e.eventType.indexOf("network") >= 0) return "network";
+  return "system";
+}
+function riskTag(score) {
+  if (!score && score !== 0) return null;
+  if (score >= 90) return { cls: "tag-risk-crit", label: "🔴 严重" };
+  if (score >= 70) return { cls: "tag-risk-high", label: "🟠 高" };
+  if (score >= 30) return { cls: "tag-risk-mid", label: "🟡 中" };
+  return { cls: "tag-risk-low", label: "🟢 低" };
+}
+function summarizeEvent(e) {
+  if (e.reason) return e.reason;
+  var p = e.redactedPayload;
+  if (typeof p === "string") return p.substring(0, 180);
+  if (p && p.message) return p.message;
+  if (p && p.userMessage) return p.userMessage.substring(0, 120);
+  if (p && p.command) return "命令: " + p.command;
+  if (p && p.params && p.params.command) return "命令: " + p.params.command;
+  if (p && p.url) return "URL: " + p.url;
+  if (p && p.filePath) return "文件: " + p.filePath;
+  return JSON.stringify(p || {}).substring(0, 180);
+}
+var _escNode;
+function esc(s) {
+  if (!s) return "";
+  if (!_escNode) { _escNode = document.createElement("span"); _escNode.appendChild(document.createTextNode("")); }
+  _escNode.firstChild.nodeValue = String(s);
+  return _escNode.innerHTML;
+}
+
+// ── Event Detail Modal ──
+function openDetail(eventId) {
+  var event = null;
+  for (var i = 0; i < events.length; i++) {
+    if (events[i].eventId === eventId) { event = events[i]; break; }
+  }
+  if (!event) return;
+  var p = event.redactedPayload;
+  var payloadDisplay = typeof p === "string" ? p : JSON.stringify(p, null, 2);
+  var bodyHtml = '<dl class="detail-grid">'
+    + '<dt>事件 ID</dt><dd>' + esc(event.eventId) + '</dd>'
+    + '<dt>会话 ID</dt><dd>' + esc(event.runId || "—") + '</dd>'
+    + '<dt>类型</dt><dd>' + eventLabel(event.eventType).label + '</dd>'
+    + '<dt>Agent</dt><dd>' + esc(event.agentId || "—") + '</dd>'
+    + '<dt>来源信任</dt><dd>' + esc(event.sourceTrust || "—") + '</dd>'
+    + '<dt>风险评分</dt><dd><strong>' + (event.riskScore || 0) + '</strong></dd>'
+    + '<dt>决策</dt><dd>' + esc(event.decision || "—") + '</dd>'
+    + '<dt>时间</dt><dd>' + (event.ts ? new Date(event.ts).toLocaleString("zh-CN") : "—") + '</dd>'
+    + (event.toolName ? '<dt>工具</dt><dd>' + esc(event.toolName) + '</dd>' : "")
+    + (event.reason ? '<dt>原因</dt><dd>' + esc(event.reason) + '</dd>' : "")
+    + '</dl>'
+    + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);margin-bottom:8px;">📦 负载数据</div>'
+    + '<div class="payload-block">' + esc(payloadDisplay) + '</div>';
+  document.getElementById("modalBody").innerHTML = bodyHtml;
+  document.getElementById("detailModal").classList.add("open");
+  selectedEventId = eventId;
+  renderEvents();
+  renderAnalysis();
+}
+function closeModal() { document.getElementById("detailModal").classList.remove("open"); }
+document.getElementById("detailModal").addEventListener("click", function(e) { if (e.target === document.getElementById("detailModal")) closeModal(); });
+
+// ── Filters ──
+document.getElementById("typeFilter").addEventListener("change", renderEvents);
+document.getElementById("sevFilter").addEventListener("change", renderEvents);
+
+// ── Buttons ──
+document.getElementById("demoSeedBtn").addEventListener("click", function() {
+  fetch(DEMO_SEED, { method: "POST" }).then(function() { fetchRuns(); }).catch(function() {});
+});
+document.getElementById("clearAllBtn").addEventListener("click", function() {
+  if (!confirm("确定要清除数据库中所有演示数据吗？此操作不可撤销。")) return;
+  fetch(DEMO_SEED, { method: "DELETE" }).then(function(res) {
+    if (res.ok) {
+      runs = []; events = []; selectedRunId = ""; selectedEventId = ""; analysisData = null;
+      renderSessions(); renderEvents(); renderAnalysis();
+    }
+  }).catch(function() {});
+});
+document.getElementById("refreshBtn").addEventListener("click", function() {
+  fetchRuns();
+  if (selectedRunId) {
+    Promise.all([fetchEvents(selectedRunId), fetchAnalysis(selectedRunId)]);
+  }
+});
+
+// ── Init ──
+fetchRuns();
+connectSSE();
+setInterval(fetchRuns, 30000);
+</script>
+</body>
+</html>
